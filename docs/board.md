@@ -14,7 +14,7 @@
 | 串口方案 | 芯片原生 USB Serial/JTAG，无 USB-UART 桥 | 枚举 `USB\VID_303A&PID_1001` → COM4 |
 | USB 口 | 单口 USB-C，原生 USB Serial/JTAG | 枚举与烧录实测 |
 | 板上 LED | GPIO8，低电平点亮 | 用户提供；固件日志确认 GPIO8 翻转（目视待确认） |
-| BOOT 按键 | GPIO9 | 用户提供，**未实测** |
+| BOOT 按键 | GPIO9，按下拉低 | 实测确认（2026-10-30，原始电平与短按事件日志） |
 | 启动绑带引脚 | GPIO2 / GPIO8 / GPIO9 | 芯片特性；GPIO8 低有效 LED 熄灭态为高，与正常启动电平一致 |
 | 原理图链接 | 待补（HW-466AB 卖家资料） | |
 

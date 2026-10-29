@@ -1,3 +1,3 @@
-idf_component_register(SRCS "led_blink.c"
+idf_component_register(SRCS "main.c"
                        INCLUDE_DIRS "."
-                       REQUIRES esp_driver_gpio)
+                       REQUIRES board app_logic esp_timer)

@@ -1,0 +1,106 @@
+Your environment is not configured to handle Unicode characters.
+
+Recommended fix (persistent):
+ - Enable "Beta: Use Unicode UTF-8 for worldwide language support" in Windows language/region settings.
+
+If you still see issues or this warning persists, you can also try one of these workarounds:
+ - Run "chcp 65001" in the current console before running idf.py.
+ - Set PYTHONUTF8=1 before running idf.py (or set it globally).
+
+Note: "chcp 65001" must be run in each new console session unless your console/profile is configured to apply it automatically.
+[1/9] Performing build step for 'bootloader'
+[1/1] C:\Windows\system32\cmd.exe /C "cd /D G:\tools\workbuddy\esp32\build\bootloader && C:\Espressif\tools\python_env\idf6.1_py3.14_env\Scripts\python.exe C:/Espressif/v6.1/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 bootloader 0x0 G:/tools/workbuddy/esp32/build/bootloader/bootloader.bin"
+Bootloader binary size 0x52f0 bytes. 0x2d10 bytes (35%) free.
+[2/9] No install step for 'bootloader'
+[3/9] Completed 'bootloader'
+[4/9] Building C object esp-idf/main/CMakeFiles/__idf_main.dir/main.c.obj
+[5/9] Linking C static library esp-idf\main\libmain.a
+[6/9] Generating esp-idf/esp_system/ld/sections.ld
+Skipping linker script generation, section names unchanged
+[7/9] Linking CXX executable c3_ai.elf
+[8/9] Generating binary image from built executable
+esptool v5.6.0
+Creating ESP32-C3 image...
+Merged 3 ELF sections.
+Successfully created ESP32-C3 image.
+Generated G:/tools/workbuddy/esp32/build/c3_ai.bin
+[9/9] C:\Windows\system32\cmd.exe /C "cd /D G:\tools\workbuddy\esp32\build && C:\Espressif\tools\python_env\idf6.1_py3.14_env\Scripts\python.exe C:/Espressif/v6.1/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 partition --type app G:/tools/workbuddy/esp32/build/partition_table/partition-table.bin G:/tools/workbuddy/esp32/build/c3_ai.bin"
+c3_ai.bin binary size 0x20380 bytes. Smallest app partition is 0x100000 bytes. 0xdfc80 bytes (87%) free.
+Adding "flash"'s dependency "all" to list of commands with default set of options.
+Executing action: all (aliases: build)
+Running ninja in directory G:\tools\workbuddy\esp32\build
+Executing "ninja all"...
+Executing action: flash
+Running ninja in directory G:\tools\workbuddy\esp32\build
+Executing "ninja flash"...
+[1/5] C:\Windows\system32\cmd.exe /C "cd /D G:\tools\workbuddy\esp32\build && C:\Espressif\tools\python_env\idf6.1_py3.14_env\Scripts\python.exe C:/Espressif/v6.1/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 partition --type app G:/tools/workbuddy/esp32/build/partition_table/partition-table.bin G:/tools/workbuddy/esp32/build/c3_ai.bin"
+c3_ai.bin binary size 0x20380 bytes. Smallest app partition is 0x100000 bytes. 0xdfc80 bytes (87%) free.
+[2/5] Performing build step for 'bootloader'
+[1/1] C:\Windows\system32\cmd.exe /C "cd /D G:\tools\workbuddy\esp32\build\bootloader && C:\Espressif\tools\python_env\idf6.1_py3.14_env\Scripts\python.exe C:/Espressif/v6.1/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 bootloader 0x0 G:/tools/workbuddy/esp32/build/bootloader/bootloader.bin"
+Bootloader binary size 0x52f0 bytes. 0x2d10 bytes (35%) free.
+[3/5] No install step for 'bootloader'
+[4/5] Completed 'bootloader'
+[4/5] Running utility command for flash
+esptool --chip esp32c3 -p COM4 -b 460800 --before=default-reset --after=hard-reset write-flash --flash-mode dio --flash-freq 80m --flash-size 4MB 0x0 bootloader/bootloader.bin 0x8000 partition_table/partition-table.bin 0x10000 c3_ai.bin --diff-with bootloader/bootloader_flashed.bin partition_table/partition-table_flashed.bin c3_ai_flashed.bin
+esptool v5.6.0
+Serial port COM4:
+Connecting...
+Connected to ESP32-C3 on COM4:
+Chip type:          ESP32-C3 (QFN32) (revision v0.4)
+Features:           Wi-Fi, BT 5 (LE), Single Core, 160MHz, Embedded Flash 4MB (XMC)
+Crystal frequency:  40MHz
+USB mode:           USB-Serial/JTAG
+MAC:                48:f6:ee:15:78:c8
+
+Uploading stub flasher...
+Running stub flasher...
+Stub flasher running.
+Changing baud rate to 460800...
+Changed.
+
+Configuring flash size...
+
+Writing 'bootloader/bootloader.bin' at 0x00000000...
+SHA digest in image updated.
+SHA digest in image updated.
+No changed sectors found, verifying if data is in flash...
+'bootloader/bootloader.bin' at 0x00000000 verified.
+
+Writing 'partition_table/partition-table.bin' at 0x00008000...
+No changed sectors found, verifying if data is in flash...
+'partition_table/partition-table.bin' at 0x00008000 verified.
+
+Writing 'c3_ai.bin' at 0x00010000...
+Changed data sectors found, fast reflashing...
+Reflashing 1 changed sector at 0x00010000...
+Flash will be erased from 0x00010000 to 0x00010fff...
+Compressed 4096 bytes to 1890...
+Writing at 0x00011000 ============================== 100.0% 1.85kB/1.85kB [0s] 
+Wrote 4096 bytes (1890 compressed) at 0x00010000 in 0.1 seconds (479.5 kbit/s).
+Reflashing 4 changed sectors at 0x00013000...
+Flash will be erased from 0x00013000 to 0x00016fff...
+Compressed 16384 bytes to 7019...
+Writing at 0x00017000 ============================== 100.0% 6.85kB/6.85kB [0s] 
+Wrote 16384 bytes (7019 compressed) at 0x00013000 in 0.1 seconds (1155.9 kbit/s).
+Reflashing 2 changed sectors at 0x00018000...
+Flash will be erased from 0x00018000 to 0x00019fff...
+Compressed 8192 bytes to 5445...
+Writing at 0x0001a000 ============================== 100.0% 5.32kB/5.32kB [0s] 
+Wrote 8192 bytes (5445 compressed) at 0x00018000 in 0.1 seconds (652.5 kbit/s).
+Reflashing 9 changed sectors at 0x0001b000...
+Flash will be erased from 0x0001b000 to 0x00023fff...
+Compressed 36864 bytes to 22357...
+Writing at 0x00021bdf =====================>          73.3% 16.00kB/21.83kB [0s] 
+Writing at 0x00024000 ============================== 100.0% 21.83kB/21.83kB [0s] 
+Wrote 36864 bytes (22357 compressed) at 0x0001b000 in 0.3 seconds (985.1 kbit/s).
+Reflashing 12 changed sectors at 0x00025000...
+Flash will be erased from 0x00025000 to 0x00030fff...
+Compressed 49152 bytes to 27420...
+Writing at 0x0002bb11 =================>              59.8% 16.00kB/26.78kB [0s] 
+Writing at 0x00031000 ============================== 100.0% 26.78kB/26.78kB [0s] 
+Wrote 49152 bytes (27420 compressed) at 0x00025000 in 0.6 seconds (707.2 kbit/s).
+Verifying written data...
+Hash of data verified.
+
+Hard resetting via RTS pin...
+Done

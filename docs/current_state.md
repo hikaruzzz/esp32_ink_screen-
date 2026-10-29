@@ -2,17 +2,20 @@
 
 更新：2026-10-30
 
-- 最后可运行提交：`983b7e4`（本次迁移随工作区一起提交）
-- 固件工程：**仓库根目录**（`CMakeLists.txt` + `main/led_blink.c`），
-  由 `C:\esp\c3-ai-led-demo` 迁入；旧目录已删除
-- 固件身份（仓库根目录构建）：
-  - led_blink.bin `bbadcaaf84efa866f86ed61aecb564b324e65f67f45132445111ac92b49104d4`
-  - led_blink.elf `61918e38d569414f289eb0250f55c4907aa6326b1c30093b1fdc26fe8f826258`
+- 最后可运行提交：`953529f`（本次 M1 按键功能随工作区一起提交）
+- 固件工程：仓库根目录；项目名 `c3_ai`；分层 `components/board`、`components/app_logic`、`main`
+- 固件身份：以每次构建 `build/c3_ai.elf` 的 SHA256 与启动日志为准（下一次记录时回填）
 - 已通过检查：
-  - M0 全部检查（见 `evidence/M0/summary.md`，含 M0-09 迁移后回归）
-  - 迁移后 `set-target` / `build` / `flash` / USB 日志均通过，500 ms 翻转时序不变
-- 未运行 / 阻塞：无
-- 下一步（M1）：
-  1. 实测 BOOT 按键 GPIO9（按下电平、去抖），回填 docs/pinmap.md
-  2. 确定 I2C 传感器型号与引脚（先核实 SuperMini 排针引出），建立 docs/requirements.md 与 acceptance.md
-  3. 按方案第 6 节补齐 `components/` 分层（板级、传感器、业务）时再拆项目结构
+  - M0 全部检查（`evidence/M0/summary.md`）
+  - M1 按键与模式：启动/心跳/短按切换/过长忽略（`evidence/M1/`，详见 `docs/acceptance.md` 执行记录）
+  - 按键实测：GPIO9 低有效；短按 130–170 ms 触发一次事件；按住 2.9–5.7 s 被忽略
+- 未运行 / 阻塞：
+  - M1-04 去抖抖动测试 — 未做
+  - M1-06 过短按压（<20 ms）— 未测
+  - M1-08 主机测试 — 阻塞：本机无主机 C 编译器
+  - M1-09 1 小时长稳 — 未执行
+  - I2C 传感器 — 阻塞：型号与引脚未确定
+- 下一步：
+  1. 确定传感器型号与 I2C 引脚（需用户提供型号；未知引脚先查 SuperMini 排针引出）
+  2. 补 M1-04 / M1-06 测试
+  3. 安装主机 C 编译器（mingw-w64）后补 `tests/host` 与 app_mode 单元测试

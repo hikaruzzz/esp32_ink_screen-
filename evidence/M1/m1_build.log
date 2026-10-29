@@ -1,0 +1,109 @@
+Your environment is not configured to handle Unicode characters.
+
+Recommended fix (persistent):
+ - Enable "Beta: Use Unicode UTF-8 for worldwide language support" in Windows language/region settings.
+
+If you still see issues or this warning persists, you can also try one of these workarounds:
+ - Run "chcp 65001" in the current console before running idf.py.
+ - Set PYTHONUTF8=1 before running idf.py (or set it globally).
+
+Note: "chcp 65001" must be run in each new console session unless your console/profile is configured to apply it automatically.
+[0/1] Re-running CMake...
+-- git rev-parse returned 'fatal: not a git repository (or any of the parent directories): .git'
+fatal: not a git repository (or any of the parent directories): .git
+-- Minimal build - ON
+-- ccache will be used for faster recompilation
+-- Building ESP-IDF components for target esp32c3
+-- KCONFIG_REPORT_VERBOSITY not set, using default
+-- Project sdkconfig file G:/tools/workbuddy/esp32/sdkconfig
+NOTE: C:/Espressif/v6.1/esp-idf/components/bootloader/Kconfig.projbuild:383: Deprecation notice: hex literal '0' without '0x' prefix detected. In the next major version, hex literals will be required to have a '0x' prefix.
+NOTE: C:/Espressif/v6.1/esp-idf/components/bootloader/Kconfig.projbuild:423: Deprecation notice: hex literal '0' without '0x' prefix detected. In the next major version, hex literals will be required to have a '0x' prefix.
+NOTE: C:/Espressif/v6.1/esp-idf/components/esp_hw_support\./lowpower/port/esp32p4/Kconfig.p4_rev3_mspi_workaround:6: Deprecation notice: hex literal '0' without '0x' prefix detected. In the next major version, hex literals will be required to have a '0x' prefix.
+NOTE: C:/Espressif/v6.1/esp-idf/components/esp_mm/Kconfig:20: Deprecation notice: hex literal '0' without '0x' prefix detected. In the next major version, hex literals will be required to have a '0x' prefix.
+Loading defaults file G:/tools/workbuddy/esp32/sdkconfig.defaults...
+NOTE: Kconfig parser version: 1
+NOTE: Kconfig defaults policy: use sdkconfig
+NOTE: Status: Finished successfully
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Adding linker script C:/Espressif/v6.1/esp-idf/components/riscv/ld/rom.api.ld
+-- App "led_blink" version: 953529f-dirty
+-- Setting up mbedtls configuration
+-- Linkage type is PUBLIC
+-- Adding linker script C:/Espressif/v6.1/esp-idf/components/esp_system/ld/esp32c3/memory.ld.in
+--   -> Preprocessing .in script: C:/Espressif/v6.1/esp-idf/components/esp_system/ld/esp32c3/memory.ld.in
+-- Adding linker script C:/Espressif/v6.1/esp-idf/components/esp_system/ld/esp32c3/sections.ld.in
+--   -> Preprocessing .in script: C:/Espressif/v6.1/esp-idf/components/esp_system/ld/esp32c3/sections.ld.in
+--   -> Applying ldgen processing: G:/tools/workbuddy/esp32/build/esp-idf/esp_system/ld/sections.ld.in
+-- Adding linker script C:/Espressif/v6.1/esp-idf/components/esp_rom/esp32c3/ld/esp32c3.rom.ld
+-- Adding linker script C:/Espressif/v6.1/esp-idf/components/esp_rom/esp32c3/ld/esp32c3.rom.api.ld
+-- Adding linker script C:/Espressif/v6.1/esp-idf/components/esp_rom/esp32c3/ld/esp32c3.rom.bt_funcs.ld
+-- Adding linker script C:/Espressif/v6.1/esp-idf/components/esp_rom/esp32c3/ld/esp32c3.rom.libgcc.ld
+-- Adding linker script C:/Espressif/v6.1/esp-idf/components/esp_rom/esp32c3/ld/esp32c3.rom.version.ld
+-- Adding linker script C:/Espressif/v6.1/esp-idf/components/esp_rom/esp32c3/ld/esp32c3.rom.ble_master.ld
+-- Adding linker script C:/Espressif/v6.1/esp-idf/components/esp_rom/esp32c3/ld/esp32c3.rom.ble_50.ld
+-- Adding linker script C:/Espressif/v6.1/esp-idf/components/esp_rom/esp32c3/ld/esp32c3.rom.ble_smp.ld
+-- Adding linker script C:/Espressif/v6.1/esp-idf/components/esp_rom/esp32c3/ld/esp32c3.rom.ble_dtm.ld
+-- Adding linker script C:/Espressif/v6.1/esp-idf/components/esp_rom/esp32c3/ld/esp32c3.rom.ble_test.ld
+-- Adding linker script C:/Espressif/v6.1/esp-idf/components/esp_rom/esp32c3/ld/esp32c3.rom.ble_scan.ld
+-- Adding linker script C:/Espressif/v6.1/esp-idf/components/esp_rom/esp32c3/ld/esp32c3.rom.eco3.ld
+-- Adding linker script C:/Espressif/v6.1/esp-idf/components/esp_rom/esp32c3/ld/esp32c3.rom.eco3_bt_funcs.ld
+-- Adding linker script C:/Espressif/v6.1/esp-idf/components/esp_rom/esp32c3/ld/esp32c3.rom.libc.ld
+-- Adding linker script C:/Espressif/v6.1/esp-idf/components/esp_hal_regi2c/esp32c3/rom.regi2c.ld
+-- Adding linker script C:/Espressif/v6.1/esp-idf/components/soc/esp32c3/ld/esp32c3.peripherals.ld
+-- Components: app_logic app_update board bootloader bootloader_support cxx efuse esp_app_format esp_blockdev esp_bootloader_format esp_common esp_driver_dma esp_driver_gpio esp_hal_ana_conv esp_hal_clock esp_hal_dma esp_hal_gpio esp_hal_gpspi esp_hal_mspi esp_hal_pmu esp_hal_regi2c esp_hal_rtc_timer esp_hal_security esp_hal_systimer esp_hal_timg esp_hal_touch_sens esp_hal_uart esp_hal_usb esp_hal_wdt esp_hw_support esp_libc esp_mm esp_partition esp_pm esp_rom esp_security esp_stdio esp_system esp_timer esp_usb_cdc_rom_console esptool_py freertos hal heap log main mbedtls partition_table pthread riscv soc spi_flash
+-- Component paths: G:/tools/workbuddy/esp32/components/app_logic C:/Espressif/v6.1/esp-idf/components/app_update G:/tools/workbuddy/esp32/components/board C:/Espressif/v6.1/esp-idf/components/bootloader C:/Espressif/v6.1/esp-idf/components/bootloader_support C:/Espressif/v6.1/esp-idf/components/cxx C:/Espressif/v6.1/esp-idf/components/efuse C:/Espressif/v6.1/esp-idf/components/esp_app_format C:/Espressif/v6.1/esp-idf/components/esp_blockdev C:/Espressif/v6.1/esp-idf/components/esp_bootloader_format C:/Espressif/v6.1/esp-idf/components/esp_common C:/Espressif/v6.1/esp-idf/components/esp_driver_dma C:/Espressif/v6.1/esp-idf/components/esp_driver_gpio C:/Espressif/v6.1/esp-idf/components/esp_hal_ana_conv C:/Espressif/v6.1/esp-idf/components/esp_hal_clock C:/Espressif/v6.1/esp-idf/components/esp_hal_dma C:/Espressif/v6.1/esp-idf/components/esp_hal_gpio C:/Espressif/v6.1/esp-idf/components/esp_hal_gpspi C:/Espressif/v6.1/esp-idf/components/esp_hal_mspi C:/Espressif/v6.1/esp-idf/components/esp_hal_pmu C:/Espressif/v6.1/esp-idf/components/esp_hal_regi2c C:/Espressif/v6.1/esp-idf/components/esp_hal_rtc_timer C:/Espressif/v6.1/esp-idf/components/esp_hal_security C:/Espressif/v6.1/esp-idf/components/esp_hal_systimer C:/Espressif/v6.1/esp-idf/components/esp_hal_timg C:/Espressif/v6.1/esp-idf/components/esp_hal_touch_sens C:/Espressif/v6.1/esp-idf/components/esp_hal_uart C:/Espressif/v6.1/esp-idf/components/esp_hal_usb C:/Espressif/v6.1/esp-idf/components/esp_hal_wdt C:/Espressif/v6.1/esp-idf/components/esp_hw_support C:/Espressif/v6.1/esp-idf/components/esp_libc C:/Espressif/v6.1/esp-idf/components/esp_mm C:/Espressif/v6.1/esp-idf/components/esp_partition C:/Espressif/v6.1/esp-idf/components/esp_pm C:/Espressif/v6.1/esp-idf/components/esp_rom C:/Espressif/v6.1/esp-idf/components/esp_security C:/Espressif/v6.1/esp-idf/components/esp_stdio C:/Espressif/v6.1/esp-idf/components/esp_system C:/Espressif/v6.1/esp-idf/components/esp_timer C:/Espressif/v6.1/esp-idf/components/esp_usb_cdc_rom_console C:/Espressif/v6.1/esp-idf/components/esptool_py C:/Espressif/v6.1/esp-idf/components/freertos C:/Espressif/v6.1/esp-idf/components/hal C:/Espressif/v6.1/esp-idf/components/heap C:/Espressif/v6.1/esp-idf/components/log G:/tools/workbuddy/esp32/main C:/Espressif/v6.1/esp-idf/components/mbedtls C:/Espressif/v6.1/esp-idf/components/partition_table C:/Espressif/v6.1/esp-idf/components/pthread C:/Espressif/v6.1/esp-idf/components/riscv C:/Espressif/v6.1/esp-idf/components/soc C:/Espressif/v6.1/esp-idf/components/spi_flash
+-- Configuring done (11.5s)
+-- Generating done (0.7s)
+-- Build files have been written to: G:/tools/workbuddy/esp32/build
+[1/17] Building C object esp-idf/app_logic/CMakeFiles/__idf_app_logic.dir/app_mode.c.obj
+[2/17] Performing build step for 'bootloader'
+[1/1] C:\Windows\system32\cmd.exe /C "cd /D G:\tools\workbuddy\esp32\build\bootloader && C:\Espressif\tools\python_env\idf6.1_py3.14_env\Scripts\python.exe C:/Espressif/v6.1/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 bootloader 0x0 G:/tools/workbuddy/esp32/build/bootloader/bootloader.bin"
+Bootloader binary size 0x52f0 bytes. 0x2d10 bytes (35%) free.
+[3/17] No install step for 'bootloader'
+[4/17] Building C object esp-idf/board/CMakeFiles/__idf_board.dir/board.c.obj
+[5/17] Building C object esp-idf/esp_app_format/CMakeFiles/__idf_esp_app_format.dir/esp_app_desc.c.obj
+[6/17] Completed 'bootloader'
+[7/17] Linking C static library esp-idf\esp_app_format\libesp_app_format.a
+[8/17] Building C object esp-idf/main/CMakeFiles/__idf_main.dir/main.c.obj
+[9/17] Linking C static library esp-idf\board\libboard.a
+[10/17] Linking C static library esp-idf\app_logic\libapp_logic.a
+[11/17] Linking C static library esp-idf\main\libmain.a
+[12/17] Generating esp-idf/esp_system/ld/sections.ld
+NOTE: C:/Espressif/v6.1/esp-idf/components/bootloader/Kconfig.projbuild:383: Deprecation notice: hex literal '0' without '0x' prefix detected. In the next major version, hex literals will be required to have a '0x' prefix.
+NOTE: C:/Espressif/v6.1/esp-idf/components/bootloader/Kconfig.projbuild:423: Deprecation notice: hex literal '0' without '0x' prefix detected. In the next major version, hex literals will be required to have a '0x' prefix.
+NOTE: C:/Espressif/v6.1/esp-idf/components/esp_hw_support\./lowpower/port/esp32p4/Kconfig.p4_rev3_mspi_workaround:6: Deprecation notice: hex literal '0' without '0x' prefix detected. In the next major version, hex literals will be required to have a '0x' prefix.
+NOTE: C:/Espressif/v6.1/esp-idf/components/esp_mm/Kconfig:20: Deprecation notice: hex literal '0' without '0x' prefix detected. In the next major version, hex literals will be required to have a '0x' prefix.
+Skipping linker fragment parsing, fragment files unchanged
+[13/17] Building C object CMakeFiles/led_blink.elf.dir/project_elf_src_esp32c3.c.obj
+[14/17] Linking CXX executable led_blink.elf
+[15/17] Generating binary image from built executable
+esptool v5.6.0
+Creating ESP32-C3 image...
+Merged 3 ELF sections.
+Successfully created ESP32-C3 image.
+Generated G:/tools/workbuddy/esp32/build/led_blink.bin
+[16/17] C:\Windows\system32\cmd.exe /C "cd /D G:\tools\workbuddy\esp32\build && C:\Espressif\tools\python_env\idf6.1_py3.14_env\Scripts\python.exe C:/Espressif/v6.1/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 partition --type app G:/tools/workbuddy/esp32/build/partition_table/partition-table.bin G:/tools/workbuddy/esp32/build/led_blink.bin"
+led_blink.bin binary size 0x20300 bytes. Smallest app partition is 0x100000 bytes. 0xdfd00 bytes (87%) free.
+Executing action: all (aliases: build)
+Running ninja in directory G:\tools\workbuddy\esp32\build
+Executing "ninja all"...
+
+Project build complete. To flash, run:
+ idf.py flash
+or
+ idf.py -p PORT flash
+or
+ python -m esptool --chip esp32c3 -b 460800 --before default-reset --after hard-reset write-flash --flash-mode dio --flash-size 4MB --flash-freq 80m 0x0 build\bootloader\bootloader.bin 0x8000 build\partition_table\partition-table.bin 0x10000 build\led_blink.bin
+or from the "G:\tools\workbuddy\esp32\build" directory
+ python -m esptool --chip esp32c3 -b 460800 --before default-reset --after hard-reset write-flash "@flash_args"
