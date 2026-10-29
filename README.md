@@ -11,7 +11,7 @@
 - [x] 引脚确认（LED/USB 已实测，I2C 待定）—— [docs/pinmap.md](docs/pinmap.md)
 - [x] 官方 hello_world 编译 / 烧录 / 复位启动
 - [x] 启动日志与证据归档 —— [evidence/M0/summary.md](evidence/M0/summary.md)
-- [x] LED GPIO8 500 ms 翻转 + 状态日志（物理目视待确认）
+- [x] LED GPIO8 500 ms 翻转 + 状态日志（日志与目视均确认）
 - [x] VS Code ESP-IDF 扩展（v2.3.0，指向现有环境）
 - [x] Git 基线（`76f9e52`）
 
@@ -20,11 +20,13 @@
 | 路径 | 内容 |
 | --- | --- |
 | AGENTS.md | 给 AI 编码工具的项目约束（新会话先读它） |
+| CMakeLists.txt / main/ | **固件工程本体**（当前为 GPIO8 LED 闪烁示例） |
+| sdkconfig.defaults | SuperMini 板级默认配置（USB 控制台、4 MB Flash） |
 | docs/ | 需求、硬件、环境、引脚、验收、当前状态 |
 | docs/current_state.md | 当前有效状态：最近可用提交、已过/未过检查、下一步 |
-| tools/ | 构建、烧录、限时日志采集、测试入口（M3 建立） |
-| tests/ | 主机测试（host/）与实板测试（hil/） |
-| firmware | 固件工程（M1 建立；M0 基线用独立目录，见下） |
+| tools/ | 环境激活、限时日志采集等脚本 |
+| tests/ | 主机测试（host/）与实板测试（hil/，M3 建立） |
+| evidence/ | 各阶段验证证据与结论 |
 
 ## 构建与烧录
 
@@ -37,16 +39,15 @@ Python env `idf6.1_py3.14_env`。板卡串口 **COM4**（原生 USB Serial/JTAG�
 . G:\tools\workbuddy\esp32\tools\idf-env.ps1
 ```
 
-M0 基线：官方 `hello_world` 副本 @ `C:\esp\c3-ai-demo`（已加 `sdkconfig.defaults`：
-USB Serial/JTAG 控制台 + 4 MB Flash）。
+固件工程即本仓库根目录（`CMakeLists.txt` + `main/`）。当前 `main/` 是 GPIO8 LED
+500 ms 翻转示例；M0 的 hello_world 基线副本保留在 `C:\esp\c3-ai-demo`（外部，
+仅作回归对照，不入库）。
 
 ```powershell
-Set-Location C:\esp\c3-ai-demo
+Set-Location G:\tools\workbuddy\esp32
 idf.py build
 idf.py -p COM4 flash
 ```
-
-LED 验证工程：`C:\esp\c3-ai-led-demo`（GPIO8 每 500 ms 翻转，状态日志走 USB 控制台）。
 
 限时日志采集（不占用交互式 monitor；`--reset` 用 RTS/DTR 复位后再采集）：
 

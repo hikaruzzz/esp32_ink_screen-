@@ -34,14 +34,17 @@
 | M0-06 | LED 日志 500 ms 翻转（8 s 窗口 19 条事件，无 panic/watchdog） | PASS（时间戳 83/583/1083/1583…） | `led-boot.log` |
 | M0-07 | LED 物理目视确认（GPIO8 低电平点亮） | PASS（用户目视：500 ms 正常闪烁） | 用户确认，2026-10-30 |
 | M0-08 | VS Code ESP-IDF 扩展 | PASS（v2.3.0 安装；EIM 注册表与用户设置已指向现有环境）| 扩展日志 `esp_idf_vsc_ext.log` |
+| M0-09 | 固件工程迁入仓库根目录后重新编译/烧录/运行 | PASS（时间戳仍为 500 ms 步进） | `relocation-build.log` / `relocation-flash.log` / `relocation-boot.log` |
 
 ## 固件身份
 
 | 固件 | SHA256 |
 | --- | --- |
 | hello_world.bin | `2630c77a020fadb39cebde0eb9f29c5274b381734c3f43763933434821c48a6d` |
-| led_blink.bin | `58985bb243118b5b9610930b443b1b0c83f54a7e60ab3b54607feb0b1f280b23` |
-| led_blink.elf | `6438c123506356dcfdb052e69df4c01f1c550f876d0e91c27620ba31cdcd7f83`（与启动日志 `ELF file SHA256: 6438c1235...` 一致） |
+| led_blink.bin（迁移前） | `58985bb243118b5b9610930b443b1b0c83f54a7e60ab3b54607feb0b1f280b23` |
+| led_blink.elf（迁移前） | `6438c123506356dcfdb052e69df4c01f1c550f876d0e91c27620ba31cdcd7f83` |
+| led_blink.bin（仓库根目录构建） | `bbadcaaf84efa866f86ed61aecb564b324e65f67f45132445111ac92b49104d4` |
+| led_blink.elf（仓库根目录构建） | `61918e38d569414f289eb0250f55c4907aa6326b1c30093b1fdc26fe8f826258`（与启动日志 `61918e38d...` 一致） |
 
 ## 现场记录（环境问题，均不阻塞）
 
@@ -56,6 +59,7 @@
 ## 文件清单
 
 - `hello_world-build.log` / `hello_world-flash.log` / `hello_world-boot.log`
-- `led_build.log` / `led_flash.log` / `led-boot.log`
+- `led_build.log` / `led_flash.log` / `led-boot.log`（迁移前，工程位于 C:\esp）
 - `led_set-target.log`
 - `chip-flash-info.log`
+- `relocation-set-target.log` / `relocation-build.log` / `relocation-flash.log` / `relocation-boot.log`（迁入仓库根目录后）

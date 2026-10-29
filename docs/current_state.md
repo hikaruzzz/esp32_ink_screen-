@@ -2,17 +2,17 @@
 
 更新：2026-10-30
 
-- 最后可运行提交：`76f9e52`（M0 基线）
-- 固件身份：
-  - hello_world.bin `2630c77a020fadb39cebde0eb9f29c5274b381734c3f43763933434821c48a6d`
-  - led_blink.bin `58985bb243118b5b9610930b443b1b0c83f54a7e60ab3b54607feb0b1f280b23`
+- 最后可运行提交：`983b7e4`（本次迁移随工作区一起提交）
+- 固件工程：**仓库根目录**（`CMakeLists.txt` + `main/led_blink.c`），
+  由 `C:\esp\c3-ai-led-demo` 迁入；旧目录已删除
+- 固件身份（仓库根目录构建）：
+  - led_blink.bin `bbadcaaf84efa866f86ed61aecb564b324e65f67f45132445111ac92b49104d4`
+  - led_blink.elf `61918e38d569414f289eb0250f55c4907aa6326b1c30093b1fdc26fe8f826258`
 - 已通过检查：
-  - 环境：ESP-IDF v6.1.0 安装并激活（`tools/idf-env.ps1`）
-  - 板卡：COM4 原生 USB Serial/JTAG；ESP32-C3 QFN32 v0.4；内嵌 4 MB XMC Flash；MAC 48:f6:ee:15:78:c8
-  - hello_world：编译、烧录（哈希校验）、USB 启动日志 —— PASS
-  - LED（GPIO8，低有效）：编译、烧录、500 ms 翻转日志（8 s 内 19 条事件，无 panic/watchdog）、用户目视闪烁确认 —— PASS
-  - 证据：`evidence/M0/`（含 summary.md）
-- 未运行 / 阻塞：无（M0 完成）
-- 下一步：
-  1. M1：按键（GPIO9 需先实测）→ I2C 传感器选型与接线确认
-  2. 扩展功能前先保持 Git 检查点习惯
+  - M0 全部检查（见 `evidence/M0/summary.md`，含 M0-09 迁移后回归）
+  - 迁移后 `set-target` / `build` / `flash` / USB 日志均通过，500 ms 翻转时序不变
+- 未运行 / 阻塞：无
+- 下一步（M1）：
+  1. 实测 BOOT 按键 GPIO9（按下电平、去抖），回填 docs/pinmap.md
+  2. 确定 I2C 传感器型号与引脚（先核实 SuperMini 排针引出），建立 docs/requirements.md 与 acceptance.md
+  3. 按方案第 6 节补齐 `components/` 分层（板级、传感器、业务）时再拆项目结构

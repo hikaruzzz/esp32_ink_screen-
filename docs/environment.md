@@ -17,6 +17,8 @@
 | 板卡串口 | **COM4**（原生 USB Serial/JTAG，`USB\VID_303A&PID_1001`） |
 | Flash 下载方式 | USB-Serial-JTAG，esptool 自动复位，无需按键 |
 | 构建配置 | 主控制台 = USB Serial/JTAG（`CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y`），Flash 4 MB |
+| 固件工程位置 | **本仓库根目录**（`CMakeLists.txt` + `main/`，2026-10-30 从 `C:\esp\c3-ai-led-demo` 迁入） |
+| M0 基线副本 | `C:\esp\c3-ai-demo`（官方 hello_world + 板级配置，外部保留作回归对照） |
 
 ## VS Code 扩展
 
