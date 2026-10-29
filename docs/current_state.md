@@ -2,6 +2,17 @@
 
 更新：2026-10-30
 
+## 下次恢复（关机/新会话后）
+
+1. 打开 VS Code 目录 `G:\tools\workbuddy\esp32`，启动 Claude Code 新会话
+   （会自动加载 [CLAUDE.md](../CLAUDE.md)，让它再读本文件与 docs/pinmap.md）
+2. 接回开发板（USB 数据线），确认串口：设备管理器中 `USB 串行设备`，
+   默认仍是 COM4；若编号变化，更新 docs/environment.md 与命令中的端口
+3. 激活环境：`. G:\tools\workbuddy\esp32\tools\idf-env.ps1`
+4. 构建/烧录：`idf.py build` / `idf.py -p COM4 flash`
+5. 测试：`tools/test-host.ps1`（主机）；`tools/capture.py --reset`（实板日志）
+6. 待办：M1-09 1 小时长稳；真实 I2C 驱动（需传感器型号与 I2C 引脚）
+
 - 最后可运行提交：`0f56fd4`（去抖状态机与测试随后提交）
 - 固件工程：仓库根目录；项目名 `c3_ai`；分层 `board` / `app_logic` / `sensor` / `main`
 - 固件身份（当前构建）：
