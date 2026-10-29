@@ -33,7 +33,7 @@
 | M0-05 | LED 工程烧录 | PASS | `led_flash.log` |
 | M0-06 | LED 日志 500 ms 翻转（8 s 窗口 19 条事件，无 panic/watchdog） | PASS（时间戳 83/583/1083/1583…） | `led-boot.log` |
 | M0-07 | LED 物理目视确认（GPIO8 低电平点亮） | PASS（用户目视：500 ms 正常闪烁） | 用户确认，2026-10-30 |
-| M0-08 | VS Code ESP-IDF 扩展 | **NOT_RUN** | 未安装 |
+| M0-08 | VS Code ESP-IDF 扩展 | PASS（v2.3.0 安装；EIM 注册表与用户设置已指向现有环境）| 扩展日志 `esp_idf_vsc_ext.log` |
 
 ## 固件身份
 

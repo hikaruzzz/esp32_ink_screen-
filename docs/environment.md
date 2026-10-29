@@ -18,6 +18,18 @@
 | Flash 下载方式 | USB-Serial-JTAG，esptool 自动复位，无需按键 |
 | 构建配置 | 主控制台 = USB Serial/JTAG（`CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y`），Flash 4 MB |
 
+## VS Code 扩展
+
+- 扩展：`espressif.esp-idf-extension` **v2.3.0**（2026-10-30 安装）
+- 扩展通过 EIM 注册表识别环境：`C:\Espressif\tools\eim_idf.json`
+  （已修正为 `status: finished`、`version: v6.1`，`idfSelectedId` 指向该条目）
+- 用户设置（`%APPDATA%\Code\User\settings.json`）：
+  - `idf.eimIdfJsonPath` = `C:\Espressif\tools\eim_idf.json`
+  - `idf.currentSetup` = `C:\Espressif\v6.1\esp-idf`
+  - `idf.port` = `COM4`
+- 扩展只在打开 IDF 工程目录时启用构建/烧录面板；M0 工程位于 `C:\esp\c3-ai-led-demo`。
+  作为参考项目仓库打开时（本仓库无 `sdkconfig`）日志中的 `Cannot access sdkconfig` 属预期无害。
+
 ## 本机网络约束（重要）
 
 - `github.com` 的 git 连接超时（21120 ms），EIM 默认在线安装会失败；

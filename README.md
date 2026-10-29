@@ -12,8 +12,8 @@
 - [x] 官方 hello_world 编译 / 烧录 / 复位启动
 - [x] 启动日志与证据归档 —— [evidence/M0/summary.md](evidence/M0/summary.md)
 - [x] LED GPIO8 500 ms 翻转 + 状态日志（物理目视待确认）
-- [ ] VS Code ESP-IDF 扩展
-- [ ] Git 基线
+- [x] VS Code ESP-IDF 扩展（v2.3.0，指向现有环境）
+- [x] Git 基线（`76f9e52`）
 
 ## 目录
 
