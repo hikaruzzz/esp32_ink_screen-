@@ -1,0 +1,10 @@
+menu "App: sensor (M1)"
+
+    config APP_SENSOR_MOCK
+        bool "Use mock sensor (no I2C hardware)"
+        default y
+        help
+            传感器型号与 I2C 引脚确认前，使用确定性虚拟数据验证采样流程、
+            错误计数与业务不阻塞。确认后关闭此选项并实现 sensor_i2c.c。
+
+endmenu

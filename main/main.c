@@ -15,6 +15,7 @@
 
 #include "app_mode.h"
 #include "board.h"
+#include "sensor.h"
 #include "esp_log.h"
 #include "esp_system.h"
 #include "esp_timer.h"
@@ -26,10 +27,13 @@
 #define SHORT_PRESS_MIN_US  20000   /* 20 ms */
 #define SHORT_PRESS_MAX_US  800000  /* 800 ms */
 #define HEARTBEAT_MS        10000
+#define SENSOR_SAMPLE_MS    2000
 
 static const char *TAG = "app";
 
 static volatile app_mode_t s_mode = APP_MODE_SLOW;
+static volatile sensor_status_t s_sensor_last = SENSOR_ERR_NOT_INIT;
+static volatile uint32_t s_sensor_errors = 0;
 static TaskHandle_t s_led_task = NULL;
 
 static void led_task(void *arg)
@@ -52,6 +56,37 @@ static void led_task(void *arg)
         on = !on;
         /* 超时则翻转；被通知则立即按新模式重新开始 */
         ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(period));
+    }
+}
+
+static long milli_frac(long milli)
+{
+    const long frac = milli % 1000;
+    return frac < 0 ? -frac : frac;
+}
+
+static void sensor_task(void *arg)
+{
+    (void)arg;
+    TickType_t last_wake = xTaskGetTickCount();
+    sensor_sample_t sample;
+
+    while (true) {
+        const sensor_status_t st = sensor_read(&sample);
+        s_sensor_last = st;
+
+        if (st == SENSOR_OK) {
+            ESP_LOGI(TAG, "sensor: T=%ld.%03ld C, RH=%ld.%03ld %%, seq=%lu",
+                     (long)(sample.temperature_milli_c / 1000), milli_frac(sample.temperature_milli_c),
+                     (long)(sample.humidity_milli_pct / 1000), milli_frac(sample.humidity_milli_pct),
+                     (unsigned long)sample.seq);
+        } else {
+            s_sensor_errors++;
+            ESP_LOGW(TAG, "sensor: read failed: %s (errors=%lu)",
+                     sensor_status_name(st), (unsigned long)s_sensor_errors);
+        }
+
+        vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(SENSOR_SAMPLE_MS));
     }
 }
 
@@ -120,13 +155,24 @@ void app_main(void)
              app_mode_name(s_mode), app_mode_period_ms(s_mode),
              BOARD_LED_GPIO, BOARD_BUTTON_GPIO);
 
+    const sensor_status_t sensor_st = sensor_init();
+    s_sensor_last = sensor_st;
+    if (sensor_st == SENSOR_OK) {
+        ESP_LOGI(TAG, "sensor: ready, sampling every %d ms", SENSOR_SAMPLE_MS);
+        xTaskCreate(sensor_task, "sensor", 4096, NULL, 4, NULL);
+    } else {
+        ESP_LOGW(TAG, "sensor: init failed: %s; local functions continue",
+                 sensor_status_name(sensor_st));
+    }
+
     xTaskCreate(led_task, "led", 3072, NULL, 5, &s_led_task);
     xTaskCreate(button_task, "button", 4096, NULL, 6, NULL);
 
     while (true) {
         vTaskDelay(pdMS_TO_TICKS(HEARTBEAT_MS));
-        ESP_LOGI(TAG, "heartbeat: mode %s, free heap %u, min free heap %u",
-                 app_mode_name(s_mode), (unsigned)esp_get_free_heap_size(),
+        ESP_LOGI(TAG, "heartbeat: mode %s, sensor %s (errors %lu), free heap %u, min free heap %u",
+                 app_mode_name(s_mode), sensor_status_name(s_sensor_last),
+                 (unsigned long)s_sensor_errors, (unsigned)esp_get_free_heap_size(),
                  (unsigned)esp_get_minimum_free_heap_size());
     }
 }

@@ -11,8 +11,10 @@
 | M1-05 | 快闪/常亮 | 目视 | FAST 约 200 ms 翻转；SOLID 常亮 |
 | M1-06 | 异常按压 | 长按 >800 ms、极短触碰 | 忽略并输出原因，模式不切换 |
 | M1-07 | 心跳与资源 | 采集 ≥30 s | 每 10 s 一条心跳；空闲堆无持续下降趋势 |
-| M1-08 | 主机测试（app_mode 纯逻辑） | `ctest` | **阻塞**：本机无主机 C 编译器（gcc/cmake 不在 PATH），待安装后补 |
+| M1-08 | 主机测试（app_mode / sensor_mock） | `tools/test-host.ps1` | 全部通过 |
 | M1-09 | 1 小时运行 | 相同负载连续运行 | 无意外复位、看门狗或持续内存下降（M1 收尾执行） |
+| M1-10 | 虚拟传感器采样 | 复位采集 12 s | 每 2 s 一条采样；心跳含 sensor 状态；无 panic |
+| M1-11 | 传感器缺失 | 关闭 mock 构建并运行 | 明确输出 `init failed: UNSUPPORTED`；LED/按键/心跳继续工作 |
 
 ## M1 执行记录（2026-10-30）
 
@@ -25,8 +27,10 @@
 | M1-05 | PASS | 用户目视快闪（200 ms）与常亮 |
 | M1-06 | 部分 PASS | 过长按压 2.9–5.7 s 被忽略并记录（`m1_button_diag.log`）；过短（<20 ms）未测 |
 | M1-07 | PASS（初步） | 心跳正常；空闲堆 331980 字节保持稳定 |
-| M1-08 | 阻塞 | 本机无主机 C 编译器（gcc/cmake 不在 PATH），待补 |
+| M1-08 | PASS | `ctest`：app_mode、sensor_mock 共 2/2 通过（`tools/test-host.ps1`） |
 | M1-09 | NOT_RUN | 1 小时长稳留待 M1 收尾 |
+| M1-10 | PASS | `m1_sensor_boot.log`：2 s 采样、seq 递增、心跳含 sensor OK |
+| M1-11 | PASS | `m1_sensor_missing_boot.log`：`init failed: UNSUPPORTED`，本地功能继续 |
 
 ## 记录要求
 

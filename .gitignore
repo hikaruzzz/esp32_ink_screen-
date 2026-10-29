@@ -23,3 +23,6 @@ secrets/
 
 # 崩溃转储
 *.stackdump
+
+# 主机测试构建产物
+tests/host/build*/

@@ -11,6 +11,10 @@
 #define BOARD_LED_GPIO    8  /* 低电平点亮 */
 #define BOARD_BUTTON_GPIO 9  /* 低电平按下（启动绑带引脚，运行时可用） */
 
+/* I2C 引脚：待确认（见 docs/pinmap.md）。-1 表示未配置，真实驱动会拒绝初始化。 */
+#define BOARD_I2C_SDA_GPIO (-1)
+#define BOARD_I2C_SCL_GPIO (-1)
+
 /* 初始化 LED 输出与按键输入（按键启用内部上拉）。失败返回错误码。 */
 esp_err_t board_init(void);
 

@@ -17,6 +17,8 @@
 | 板卡串口 | **COM4**（原生 USB Serial/JTAG，`USB\VID_303A&PID_1001`） |
 | Flash 下载方式 | USB-Serial-JTAG，esptool 自动复位，无需按键 |
 | 构建配置 | 主控制台 = USB Serial/JTAG（`CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y`），Flash 4 MB |
+| 主机 C 编译器 | `C:\tools\mingw64\bin\gcc.exe`（WinLibs GCC 16.2.0 UCRT，2026-10-30 解压官方 zip） |
+| 主机测试入口 | `tools/test-host.ps1`（CMake/Ninja 使用 IDF 自带工具） |
 | 固件工程位置 | **本仓库根目录**（`CMakeLists.txt` + `main/`，2026-10-30 从 `C:\esp\c3-ai-led-demo` 迁入） |
 | M0 基线副本 | `C:\esp\c3-ai-demo`（官方 hello_world + 板级配置，外部保留作回归对照） |
 
@@ -40,6 +42,8 @@
   清华 PyPI。均只用于安装，不影响固件来源校验（release 包来自乐鑫官方 CDN）。
 - Git Bash 会设置 `MSYSTEM`，ESP-IDF 6.x 明确拒绝在 MSys/Mingw 下运行；
   `tools/idf-env.ps1` 已在内部清除。所有 `idf.py` 命令必须经该脚本在 PowerShell 中执行。
+- winget 安装 WinLibs（`BrechtSanders.WinLibs.POSIX.UCRT`）在本机长时间卡在自解压，
+  已终止；改为直接解压官方 zip 到 `C:\tools\mingw64`，gcc 可用。
 
 ## 使用约定
 

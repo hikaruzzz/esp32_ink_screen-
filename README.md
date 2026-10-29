@@ -55,7 +55,14 @@ idf.py -p COM4 flash
 python G:\tools\workbuddy\esp32\tools\capture.py --port COM4 --reset --seconds 8 --out <日志路径>
 ```
 
-证据目录：`evidence/M0/`，验证结论见 [evidence/M0/summary.md](evidence/M0/summary.md)。
+主机单元测试（纯逻辑模块，不依赖目标板）：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\test-host.ps1
+```
+
+证据目录：`evidence/M0/`、`evidence/M1/`，验证结论见对应 `summary.md` 与
+[docs/acceptance.md](docs/acceptance.md)。
 
 ## 文档导航
 
