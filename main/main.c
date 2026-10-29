@@ -5,14 +5,16 @@
  * - USB Serial/JTAG 输出按键事件、模式变化与 10 s 心跳
  *
  * 线程模型（单核 C3）：
- *   button_task 轮询采样并做去抖，仅它写 s_mode；
+ *   button_task 采样按键并喂给纯逻辑去抖状态机（app_button），仅它写 s_mode；
  *   led_task 读取 s_mode 并按周期翻转，通过任务通知快速响应模式变化；
+ *   sensor_task 每 2 s 读取传感器（M1 默认虚拟驱动）；
  *   app_main 负责初始化与心跳日志。
  */
 
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "app_button.h"
 #include "app_mode.h"
 #include "board.h"
 #include "sensor.h"
@@ -22,12 +24,12 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-#define BUTTON_SAMPLE_MS    10   /* 采样周期 */
-#define DEBOUNCE_SAMPLES    3    /* 连续 3 次（≥30 ms）稳定才确认变化 */
-#define SHORT_PRESS_MIN_US  20000   /* 20 ms */
-#define SHORT_PRESS_MAX_US  800000  /* 800 ms */
-#define HEARTBEAT_MS        10000
-#define SENSOR_SAMPLE_MS    2000
+#define BUTTON_SAMPLE_MS         10
+#define BUTTON_DEBOUNCE_SAMPLES  3
+#define BUTTON_MIN_PRESS_MS      20
+#define BUTTON_MAX_PRESS_MS      800
+#define HEARTBEAT_MS             10000
+#define SENSOR_SAMPLE_MS         2000
 
 static const char *TAG = "app";
 
@@ -90,18 +92,27 @@ static void sensor_task(void *arg)
     }
 }
 
+static uint64_t now_ms(void)
+{
+    return (uint64_t)esp_timer_get_time() / 1000U;
+}
+
 static void button_task(void *arg)
 {
     (void)arg;
 
-    bool stable = board_button_pressed();
-    bool candidate = stable;
-    int candidate_cnt = 0;
-    int last_raw = -1;
-    int64_t press_start_us = 0;
+    const app_button_config_t cfg = {
+        .sample_ms = BUTTON_SAMPLE_MS,
+        .debounce_samples = BUTTON_DEBOUNCE_SAMPLES,
+        .min_press_ms = BUTTON_MIN_PRESS_MS,
+        .max_press_ms = BUTTON_MAX_PRESS_MS,
+    };
+    app_button_t button;
+    app_button_init(&button, &cfg, board_button_pressed(), now_ms());
 
+    int last_raw = -1;
     ESP_LOGI(TAG, "button: GPIO%d active-low, sample %d ms, debounce %d samples",
-             BOARD_BUTTON_GPIO, BUTTON_SAMPLE_MS, DEBOUNCE_SAMPLES);
+             BOARD_BUTTON_GPIO, BUTTON_SAMPLE_MS, BUTTON_DEBOUNCE_SAMPLES);
 
     while (true) {
         const bool raw = board_button_pressed();
@@ -111,36 +122,29 @@ static void button_task(void *arg)
                      raw ? "LOW (pressed)" : "HIGH (released)");
         }
 
-        if (raw == stable) {
-            candidate = stable;
-            candidate_cnt = 0;
-        } else if (raw == candidate) {
-            if (++candidate_cnt >= DEBOUNCE_SAMPLES) {
-                stable = raw;
-                candidate_cnt = 0;
-
-                if (stable) {
-                    press_start_us = esp_timer_get_time();
-                    ESP_LOGI(TAG, "button: pressed");
-                } else {
-                    const int64_t dur_us = esp_timer_get_time() - press_start_us;
-                    if (dur_us >= SHORT_PRESS_MIN_US && dur_us <= SHORT_PRESS_MAX_US) {
-                        const app_mode_t next = app_mode_next(s_mode);
-                        s_mode = next;
-                        ESP_LOGI(TAG, "button: released after %lld ms -> short press, mode %s (%u ms)",
-                                 (long long)(dur_us / 1000), app_mode_name(next),
-                                 app_mode_period_ms(next));
-                        xTaskNotifyGive(s_led_task);
-                    } else {
-                        ESP_LOGW(TAG, "button: released after %lld ms, ignored (%s)",
-                                 (long long)(dur_us / 1000),
-                                 dur_us < SHORT_PRESS_MIN_US ? "too short" : "too long");
-                    }
-                }
-            }
-        } else {
-            candidate = raw;
-            candidate_cnt = 1;
+        switch (app_button_feed(&button, raw, now_ms())) {
+        case APP_BUTTON_PRESSED:
+            ESP_LOGI(TAG, "button: pressed");
+            break;
+        case APP_BUTTON_SHORT_PRESS: {
+            const app_mode_t next = app_mode_next(s_mode);
+            s_mode = next;
+            ESP_LOGI(TAG, "button: released after %lu ms -> short press, mode %s (%u ms)",
+                     (unsigned long)app_button_last_press_ms(&button), app_mode_name(next),
+                     app_mode_period_ms(next));
+            xTaskNotifyGive(s_led_task);
+            break;
+        }
+        case APP_BUTTON_IGNORED_TOO_SHORT:
+            ESP_LOGW(TAG, "button: released after %lu ms, ignored (too short)",
+                     (unsigned long)app_button_last_press_ms(&button));
+            break;
+        case APP_BUTTON_IGNORED_TOO_LONG:
+            ESP_LOGW(TAG, "button: released after %lu ms, ignored (too long)",
+                     (unsigned long)app_button_last_press_ms(&button));
+            break;
+        default:
+            break;
         }
 
         vTaskDelay(pdMS_TO_TICKS(BUTTON_SAMPLE_MS));

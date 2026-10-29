@@ -22,3 +22,10 @@ add_executable(test_sensor_mock
 target_include_directories(test_sensor_mock PRIVATE
     ${REPO_ROOT}/components/sensor/include)
 add_test(NAME sensor_mock COMMAND test_sensor_mock)
+
+add_executable(test_button_fsm
+    test_button_fsm.c
+    ${REPO_ROOT}/components/app_logic/app_button.c)
+target_include_directories(test_button_fsm PRIVATE
+    ${REPO_ROOT}/components/app_logic/include)
+add_test(NAME button_fsm COMMAND test_button_fsm)

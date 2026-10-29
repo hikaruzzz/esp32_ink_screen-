@@ -1,0 +1,182 @@
+ESP-ROM:esp32c3-api1-20210207
+Build:Feb  7 2021
+rst:0x15 (USB_UART_CHIP_RESET),boot:0xf (SPI_FAST_FLASH_BOOT)
+Saved PC:0x403831a8
+SPIWP:0xee
+mode:DIO, clock div:1
+load:0x3fcd5830,len:0x1598
+load:0x403cbf10,len:0xccc
+load:0x403ce710,len:0x302c
+entry 0x403cbf1a
+I (24) boot: ESP-IDF v6.1.0 2nd stage bootloader
+I (24) boot: compile time Oct 30 2026 00:23:30
+I (25) boot: chip revision: v0.4
+I (25) boot: efuse block revision: v1.3
+I (26) boot.esp32c3: SPI Speed      : 80MHz
+I (26) boot.esp32c3: SPI Mode       : DIO
+I (27) boot.esp32c3: SPI Flash Size : 4MB
+I (27) boot: Enabling RNG early entropy source...
+I (28) boot: Partition Table:
+I (28) boot: ## Label            Usage          Type ST Offset   Length
+I (29) boot:  0 nvs              WiFi data        01 02 00009000 00006000
+I (30) boot:  1 phy_init         RF data          01 01 0000f000 00001000
+I (31) boot:  2 factory          factory app      00 00 00010000 00100000
+I (32) boot: End of partition table
+I (33) esp_image: segment 0: paddr=00010020 vaddr=3c010020 size=065b4h ( 26036) map
+I (38) esp_image: segment 1: paddr=000165dc vaddr=3fc89000 size=0180ch (  6156) load
+I (40) esp_image: segment 2: paddr=00017df0 vaddr=40380000 size=08228h ( 33320) load
+I (47) esp_image: segment 3: paddr=00020020 vaddr=42000020 size=0fbbch ( 64444) map
+I (58) esp_image: segment 4: paddr=0002fbe4 vaddr=40388228 size=00ca0h (  3232) load
+I (59) esp_image: segment 5: paddr=0003088c vaddr=50000000 size=00024h (    36) load
+I (63) boot: Loaded app from partition at offset 0x10000
+I (63) boot: Disabling RNG early entropy source...
+I (64) cpu_start: Unicore app
+I (72) cpu_start: Pro cpu start user code
+I (72) cpu_start: cpu freq: 160000000 Hz
+I (73) app_init: Application information:
+I (73) app_init: Project name:     c3_ai
+I (74) app_init: App version:      aa092a6-dirty
+I (74) app_init: Compile time:     Oct 30 2026 00:52:03
+I (75) app_init: ELF file SHA256:  b6b4a06c5...
+I (75) app_init: ESP-IDF:          v6.1.0
+I (76) efuse_init: Min chip rev:     v0.3
+I (76) efuse_init: Max chip rev:     v1.99 
+I (76) efuse_init: Chip rev:         v0.4
+I (77) heap_init: Initializing. RAM available for dynamic allocation:
+I (78) heap_init: At 3FC8B7D0 len 00034830 (210 KiB): RAM
+I (78) heap_init: At 3FCC0000 len 0001C710 (113 KiB): Retention RAM
+I (79) heap_init: At 3FCDC710 len 00002950 (10 KiB): Retention RAM
+I (79) heap_init: At 50000024 len 00001FC4 (7 KiB): RTCRAM
+I (80) spi_flash: detected chip: generic
+I (80) spi_flash: flash io: dio
+I (80) sleep_gpio: Configure to isolate all GPIO pins in sleep state
+I (81) sleep_gpio: Enable automatic switching of GPIO sleep configuration
+I (83) main_task: Started on CPU0
+I (83) main_task: Calling app_main()
+I (83) app: boot: mode SLOW (1000 ms toggle), LED GPIO8, button GPIO9
+I (83) app: sensor: ready, sampling every 2000 ms
+I (83) app: sensor: T=25.100 C, RH=50.100 %, seq=1
+I (83) app: button: GPIO9 active-low, sample 10 ms, debounce 3 samples
+I (83) app: button: GPIO9 HIGH (released)
+I (2083) app: sensor: T=25.200 C, RH=50.200 %, seq=2
+I (4083) app: sensor: T=25.300 C, RH=50.300 %, seq=3
+I (4983) app: button: GPIO9 LOW (pressed)
+I (5003) app: button: pressed
+I (5133) app: button: GPIO9 HIGH (released)
+I (5153) app: button: released after 150 ms -> short press, mode FAST (200 ms)
+I (5403) app: button: GPIO9 LOW (pressed)
+I (5423) app: button: pressed
+I (5573) app: button: GPIO9 HIGH (released)
+I (5593) app: button: released after 170 ms -> short press, mode SOLID (0 ms)
+I (5833) app: button: GPIO9 LOW (pressed)
+I (5853) app: button: pressed
+I (5943) app: button: GPIO9 HIGH (released)
+I (5963) app: button: released after 110 ms -> short press, mode SLOW (1000 ms)
+I (6083) app: sensor: T=25.400 C, RH=50.400 %, seq=4
+I (6203) app: button: GPIO9 LOW (pressed)
+I (6223) app: button: pressed
+I (6353) app: button: GPIO9 HIGH (released)
+I (6373) app: button: released after 150 ms -> short press, mode FAST (200 ms)
+I (6603) app: button: GPIO9 LOW (pressed)
+I (6623) app: button: pressed
+I (6753) app: button: GPIO9 HIGH (released)
+I (6773) app: button: released after 150 ms -> short press, mode SOLID (0 ms)
+I (6953) app: button: GPIO9 LOW (pressed)
+I (6973) app: button: pressed
+I (7163) app: button: GPIO9 HIGH (released)
+I (7183) app: button: released after 210 ms -> short press, mode SLOW (1000 ms)
+I (7413) app: button: GPIO9 LOW (pressed)
+I (7433) app: button: pressed
+I (7553) app: button: GPIO9 HIGH (released)
+I (7573) app: button: released after 140 ms -> short press, mode FAST (200 ms)
+I (7793) app: button: GPIO9 LOW (pressed)
+I (7813) app: button: pressed
+I (7973) app: button: GPIO9 HIGH (released)
+I (7993) app: button: released after 180 ms -> short press, mode SOLID (0 ms)
+I (8083) app: sensor: T=25.500 C, RH=50.500 %, seq=5
+I (8213) app: button: GPIO9 LOW (pressed)
+I (8233) app: button: pressed
+I (8363) app: button: GPIO9 HIGH (released)
+I (8383) app: button: released after 150 ms -> short press, mode SLOW (1000 ms)
+I (8603) app: button: GPIO9 LOW (pressed)
+I (8623) app: button: pressed
+I (8773) app: button: GPIO9 HIGH (released)
+I (8793) app: button: released after 170 ms -> short press, mode FAST (200 ms)
+I (10083) app: sensor: T=25.600 C, RH=50.600 %, seq=6
+I (10083) app: heartbeat: mode FAST, sensor OK (errors 0), free heap 327764, min free heap 327764
+I (12083) app: sensor: T=25.700 C, RH=50.700 %, seq=7
+I (13613) app: button: GPIO9 LOW (pressed)
+I (13633) app: button: pressed
+I (13733) app: button: GPIO9 HIGH (released)
+I (13753) app: button: released after 120 ms -> short press, mode SOLID (0 ms)
+I (13853) app: button: GPIO9 LOW (pressed)
+I (13873) app: button: pressed
+I (13943) app: button: GPIO9 HIGH (released)
+I (13963) app: button: released after 90 ms -> short press, mode SLOW (1000 ms)
+I (14083) app: sensor: T=25.800 C, RH=50.800 %, seq=8
+I (14123) app: button: GPIO9 LOW (pressed)
+I (14143) app: button: pressed
+I (14203) app: button: GPIO9 HIGH (released)
+I (14223) app: button: released after 80 ms -> short press, mode FAST (200 ms)
+I (16083) app: sensor: T=25.900 C, RH=50.900 %, seq=9
+I (18083) app: sensor: T=26.000 C, RH=51.000 %, seq=10
+I (20083) app: sensor: T=26.100 C, RH=51.100 %, seq=11
+I (20083) app: heartbeat: mode FAST, sensor OK (errors 0), free heap 327764, min free heap 327764
+I (22083) app: sensor: T=26.200 C, RH=51.200 %, seq=12
+I (24083) app: sensor: T=26.300 C, RH=51.300 %, seq=13
+I (26083) app: sensor: T=26.400 C, RH=51.400 %, seq=14
+I (28083) app: sensor: T=26.500 C, RH=51.500 %, seq=15
+I (30083) app: sensor: T=26.600 C, RH=51.600 %, seq=16
+I (30083) app: heartbeat: mode FAST, sensor OK (errors 0), free heap 327764, min free heap 327764
+I (32083) app: sensor: T=26.700 C, RH=51.700 %, seq=17
+I (34083) app: sensor: T=26.800 C, RH=51.800 %, seq=18
+I (36083) app: sensor: T=26.900 C, RH=51.900 %, seq=19
+I (38083) app: sensor: T=27.000 C, RH=52.000 %, seq=20
+I (40083) app: sensor: T=27.100 C, RH=52.100 %, seq=21
+I (40083) app: heartbeat: mode FAST, sensor OK (errors 0), free heap 327764, min free heap 327764
+I (42083) app: sensor: T=27.200 C, RH=52.200 %, seq=22
+I (44083) app: sensor: T=27.300 C, RH=52.300 %, seq=23
+I (46083) app: sensor: T=27.400 C, RH=52.400 %, seq=24
+I (48083) app: sensor: T=27.500 C, RH=52.500 %, seq=25
+I (50083) app: sensor: T=27.600 C, RH=52.600 %, seq=26
+I (50083) app: heartbeat: mode FAST, sensor OK (errors 0), free heap 327764, min free heap 327764
+I (52083) app: sensor: T=27.700 C, RH=52.700 %, seq=27
+I (54083) app: sensor: T=27.800 C, RH=52.800 %, seq=28
+I (56083) app: sensor: T=27.900 C, RH=52.900 %, seq=29
+I (58083) app: sensor: T=28.000 C, RH=53.000 %, seq=30
+I (60083) app: sensor: T=28.100 C, RH=53.100 %, seq=31
+I (60083) app: heartbeat: mode FAST, sensor OK (errors 0), free heap 327764, min free heap 327764
+I (62083) app: sensor: T=28.200 C, RH=53.200 %, seq=32
+I (64083) app: sensor: T=28.300 C, RH=53.300 %, seq=33
+I (66083) app: sensor: T=28.400 C, RH=53.400 %, seq=34
+I (68083) app: sensor: T=28.500 C, RH=53.500 %, seq=35
+I (70083) app: sensor: T=28.600 C, RH=53.600 %, seq=36
+I (70083) app: heartbeat: mode FAST, sensor OK (errors 0), free heap 327764, min free heap 327764
+I (72083) app: sensor: T=28.700 C, RH=53.700 %, seq=37
+I (74083) app: sensor: T=28.800 C, RH=53.800 %, seq=38
+I (76083) app: sensor: T=28.900 C, RH=53.900 %, seq=39
+I (78083) app: sensor: T=29.000 C, RH=54.000 %, seq=40
+I (80083) app: sensor: T=29.100 C, RH=54.100 %, seq=41
+I (80083) app: heartbeat: mode FAST, sensor OK (errors 0), free heap 327764, min free heap 327764
+I (82083) app: sensor: T=29.200 C, RH=54.200 %, seq=42
+I (84083) app: sensor: T=29.300 C, RH=54.300 %, seq=43
+I (86083) app: sensor: T=29.400 C, RH=54.400 %, seq=44
+I (88083) app: sensor: T=29.500 C, RH=54.500 %, seq=45
+I (90083) app: sensor: T=29.600 C, RH=54.600 %, seq=46
+I (90083) app: heartbeat: mode FAST, sensor OK (errors 0), free heap 327764, min free heap 327764
+I (92083) app: sensor: T=29.700 C, RH=54.700 %, seq=47
+I (94083) app: sensor: T=29.800 C, RH=54.800 %, seq=48
+I (96083) app: sensor: T=29.900 C, RH=54.900 %, seq=49
+I (98083) app: sensor: T=30.000 C, RH=50.000 %, seq=50
+I (100083) app: sensor: T=30.100 C, RH=50.100 %, seq=51
+I (100083) app: heartbeat: mode FAST, sensor OK (errors 0), free heap 327764, min free heap 327764
+I (102083) app: sensor: T=30.200 C, RH=50.200 %, seq=52
+I (104083) app: sensor: T=30.300 C, RH=50.300 %, seq=53
+I (106083) app: sensor: T=30.400 C, RH=50.400 %, seq=54
+I (108083) app: sensor: T=30.500 C, RH=50.500 %, seq=55
+I (110083) app: sensor: T=30.600 C, RH=50.600 %, seq=56
+I (110083) app: heartbeat: mode FAST, sensor OK (errors 0), free heap 327764, min free heap 327764
+I (112083) app: sensor: T=30.700 C, RH=50.700 %, seq=57
+I (114083) app: sensor: T=30.800 C, RH=50.800 %, seq=58
+I (116083) app: sensor: T=30.900 C, RH=50.900 %, seq=59
+I (118083) app: sensor: T=31.000 C, RH=51.000 %, seq=60
