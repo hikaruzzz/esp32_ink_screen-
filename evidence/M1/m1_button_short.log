@@ -74,3 +74,6 @@ I (12324) app: button: pressed
 I (12474) app: button: GPIO9 HIGH (released)
 I (12494) app: button: released after 170 ms -> short press, mode FAST (200 ms)
 I (20084) app: heartbeat: mode FAST, free heap 331980, min free heap 331980
+I (30084) app: heartbeat: mode FAST, free heap 331980, min free heap 331980
+I (40084) app: heartbeat: mode FAST, free heap 331980, min free heap 331980
+I (50084) app: heartbeat: mode FAST, free heap 331980, min free heap 331980
