@@ -1,5 +1,5 @@
 /*
- * M0 功能验证：GPIO8 板载 LED 每 500 ms 翻转一次，并通过 USB Serial/JTAG 输出状态日志。
+ * GPIO8 板载 LED 每 1000 ms 翻转一次，并通过 USB Serial/JTAG 输出状态日志。
  *
  * 板卡：HW-466AB ESP32-C3 SuperMini
  * LED：GPIO8，低电平点亮（用户提供，本次实机验证）
@@ -14,7 +14,7 @@
 #include "freertos/task.h"
 
 #define BLINK_GPIO      GPIO_NUM_8
-#define BLINK_PERIOD_MS 500
+#define BLINK_PERIOD_MS 1000
 
 static const char *TAG = "led_blink";
 
