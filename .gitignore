@@ -1,0 +1,25 @@
+# ESP-IDF 构建产物（固件工程目前位于 C:\esp，日志之外不入库）
+build/
+sdkconfig
+sdkconfig.old
+*.bin
+*.elf
+*.map
+dependencies.lock
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# OS
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# 本地凭据/配置
+secrets/
+*.local
+
+# 崩溃转储
+*.stackdump
