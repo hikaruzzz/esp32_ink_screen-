@@ -48,3 +48,15 @@
 - 风险：`DIN/CLK/CS` 若仍被原手机壳 MCU 推挽驱动，直接驱动会冲突；
   需实物确认原 MCU 是否已拆除（拆机资料做法是拆掉 MCU 后飞线）
 - 烧录：`idf.py -C tools/gpio_probe -p COM4 flash`
+
+## 墨水屏驱动验证：epd_hello（2026-10-31）
+
+- 位置：`tools/epd_hello/`（独立工程；驱动 `epd_se0398nz07.c` 暂放 `main/`，验证后抽到 `components/`）
+- 参考：社区驱动 `epd3in98.py`（SE0398NZ07-FNG，A0/A1，768×552，BWRY 2bpp，全刷）
+- 时序：`0x00=0x0B` / `0x61=768×600` / `0x04` 上电 / 逐行 `0x83`+`0x10`(192 B) /
+  `0x12 0x01` 刷新 / `0x02` 关电；BUSY 低=忙
+- 实板（COM4）：`ready(reset)=1`、`ready(power-on)=1`；552 行传输完成；
+  刷新 `15015 ms`；结果 `ESP_OK`；空闲堆 216420 B
+- 画面：白底 + 黄色边框 + 黑色 `Hello World` + 红色色条（四色映射验证）
+- 日志：`evidence/M1/epd_hello.log`
+- 待确认：目视画面是否正确；若呈规则条纹错位，改 `EPD_PANEL_IS_A1=1` 重编
