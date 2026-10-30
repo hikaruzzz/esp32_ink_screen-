@@ -27,6 +27,18 @@ void app_main(void)
 
     ESP_ERROR_CHECK(epd_init());
 
+    /*
+     * 排错画面：白底 + 每 50 行一个数字标签，数字即该标签在帧缓冲中的行号。
+     * 读数顺序可直接反推"帧缓冲行 → 屏幕物理行"的真实映射。
+     */
+    /*
+     * 先整屏刷白一遍：上下两个栅极区从同一初始白底起步，缓解两半亮度差异。
+     */
+    epd_fill(EPD_WHITE);
+    ESP_LOGI(TAG, "clear pass: fill white, refresh");
+    ESP_ERROR_CHECK(epd_display());
+
+    /* 目标画面：白底 + 黄色边框 + 黑色 Hello World + 红色色条（验证四色映射） */
     epd_fill(EPD_WHITE);
     epd_fill_rect(12, 12, EPD_WIDTH - 24, EPD_HEIGHT - 24, EPD_YELLOW);
     epd_fill_rect(20, 20, EPD_WIDTH - 40, EPD_HEIGHT - 40, EPD_WHITE);

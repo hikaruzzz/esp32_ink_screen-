@@ -25,6 +25,7 @@
 #define EPD_SPI_HZ    (8 * 1000 * 1000)
 #define EPD_BUSY_INIT_TIMEOUT_MS   2000
 #define EPD_REFRESH_TIMEOUT_MS     40000
+#define EPD_REFRESH_PASSES         1
 #define EPD_POWEROFF_TIMEOUT_MS    5000
 
 static const char *TAG = "epd";
@@ -40,6 +41,16 @@ typedef struct {
 } glyph_t;
 
 static const glyph_t k_glyphs[] = {
+    {'0', {0x0E, 0x11, 0x13, 0x15, 0x19, 0x11, 0x0E}},
+    {'1', {0x04, 0x0C, 0x04, 0x04, 0x04, 0x04, 0x0E}},
+    {'2', {0x0E, 0x11, 0x01, 0x02, 0x04, 0x08, 0x1F}},
+    {'3', {0x1F, 0x02, 0x04, 0x02, 0x01, 0x11, 0x0E}},
+    {'4', {0x02, 0x06, 0x0A, 0x12, 0x1F, 0x02, 0x02}},
+    {'5', {0x1F, 0x10, 0x1E, 0x01, 0x01, 0x11, 0x0E}},
+    {'6', {0x06, 0x08, 0x10, 0x1E, 0x11, 0x11, 0x0E}},
+    {'7', {0x1F, 0x01, 0x02, 0x04, 0x08, 0x08, 0x08}},
+    {'8', {0x0E, 0x11, 0x11, 0x0E, 0x11, 0x11, 0x0E}},
+    {'9', {0x0E, 0x11, 0x11, 0x0F, 0x01, 0x02, 0x0C}},
     {'H', {0x11, 0x11, 0x11, 0x1F, 0x11, 0x11, 0x11}},
     {'e', {0x00, 0x00, 0x0E, 0x11, 0x1F, 0x10, 0x0E}},
     {'l', {0x0C, 0x04, 0x04, 0x04, 0x04, 0x04, 0x0E}},
@@ -237,12 +248,17 @@ esp_err_t epd_display(void)
     epd_hw_init();
 
     uint8_t area[9] = {0x00, 0x00, 0x02, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x01};
-    for (int s2 = 0; s2 < EPD_HEIGHT; ++s2) {
-#if EPD_PANEL_IS_A1
-        const int y = (s2 <= 299) ? (s2 * 2 - 599) : (s2 * 2);
-#else
-        const int y = (s2 <= 275) ? (s2 * 2) : (1103 - 2 * s2);
-#endif
+
+    /* 实测映射（evidence/M1/epd_hello_upperram.log + 实拍照片）：
+     *   物理行 p <= 299：偶数 RAM 行 y = 2p（偶数区覆盖物理 0~299）
+     *   物理行 p >= 300：奇数 RAM 行 y = 2p-599（奇数区覆盖物理 300~599，552~599 不可见）
+     * 两半区都不做水平镜像；控制器 RAM 共 600 行，本驱动使用 0~599 全部地址。
+     */
+    for (int i = 0; i < EPD_HEIGHT; ++i) {
+        const int p = (i + EPD_ROW_SHIFT) % EPD_HEIGHT;
+        const uint8_t *src = &s_fb[i * EPD_ROW_BYTES];
+        const int y = (p <= 299) ? (2 * p) : (2 * p - 599);
+
         area[4] = (uint8_t)((y >> 8) & 0xFF);
         area[5] = (uint8_t)(y & 0xFF);
         area[6] = area[4];
@@ -251,10 +267,10 @@ esp_err_t epd_display(void)
         epd_write_cmd(0x83); /* Set Partial RAM Area */
         epd_write_data(area, sizeof(area));
         epd_write_cmd(0x10); /* Write RAM Data */
-        epd_write_data(&s_fb[s2 * EPD_ROW_BYTES], EPD_ROW_BYTES);
+        epd_write_data(src, EPD_ROW_BYTES);
 
-        if ((s2 % 100) == 0) {
-            ESP_LOGI(TAG, "row %d/%d", s2, EPD_HEIGHT);
+        if ((i % 100) == 0) {
+            ESP_LOGI(TAG, "row %d/%d -> y=%d", i, EPD_HEIGHT, y);
         }
     }
 
@@ -263,17 +279,27 @@ esp_err_t epd_display(void)
     epd_write_cmd(0x83);
     epd_write_data(restore, sizeof(restore));
 
+    /*
+     * 连刷两遍：首遍刷新后竖直中线（A0 栅极映射换算法处，物理第 275/276 行）
+     * 会残留一条未完成转换的金色细线；第二遍波形可将其补刷到位。
+     */
     const uint8_t on = 0x01;
-    epd_write_cmd(0x12);
-    epd_write_data(&on, 1);
+    bool refreshed = false;
+    for (int pass = 0; pass < EPD_REFRESH_PASSES; ++pass) {
+        epd_write_cmd(0x12);
+        epd_write_data(&on, 1);
 
-    const int64_t t0 = esp_timer_get_time();
-    const bool refreshed = epd_wait_busy(EPD_REFRESH_TIMEOUT_MS);
-    const int64_t elapsed_ms = (esp_timer_get_time() - t0) / 1000;
-    if (refreshed) {
-        ESP_LOGI(TAG, "refresh done in %" PRId64 " ms", elapsed_ms);
-    } else {
-        ESP_LOGW(TAG, "refresh BUSY timeout after %" PRId64 " ms", elapsed_ms);
+        const int64_t t0 = esp_timer_get_time();
+        refreshed = epd_wait_busy(EPD_REFRESH_TIMEOUT_MS);
+        const int64_t elapsed_ms = (esp_timer_get_time() - t0) / 1000;
+        if (refreshed) {
+            ESP_LOGI(TAG, "refresh pass %d/%d done in %" PRId64 " ms",
+                     pass + 1, EPD_REFRESH_PASSES, elapsed_ms);
+        } else {
+            ESP_LOGW(TAG, "refresh pass %d/%d BUSY timeout after %" PRId64 " ms",
+                     pass + 1, EPD_REFRESH_PASSES, elapsed_ms);
+            break;
+        }
     }
 
     const uint8_t off = 0x00;

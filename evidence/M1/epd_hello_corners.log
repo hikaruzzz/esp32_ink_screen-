@@ -1,0 +1,72 @@
+ESP-ROM:esp32c3-api1-20210207
+Build:Feb  7 2021
+rst:0x15 (USB_UART_CHIP_RESET),boot:0xf (SPI_FAST_FLASH_BOOT)
+Saved PC:0x40385abc
+SPIWP:0xee
+mode:DIO, clock div:1
+load:0x3fcd5830,len:0x1598
+load:0x403cbf10,len:0xccc
+load:0x403ce710,len:0x302c
+entry 0x403cbf1a
+I (24) boot: ESP-IDF v6.1.0 2nd stage bootloader
+I (24) boot: compile time Oct 31 2026 01:23:28
+I (25) boot: chip revision: v0.4
+I (25) boot: efuse block revision: v1.3
+I (26) boot.esp32c3: SPI Speed      : 80MHz
+I (26) boot.esp32c3: SPI Mode       : DIO
+I (27) boot.esp32c3: SPI Flash Size : 4MB
+I (27) boot: Enabling RNG early entropy source...
+I (28) boot: Partition Table:
+I (28) boot: ## Label            Usage          Type ST Offset   Length
+I (29) boot:  0 nvs              WiFi data        01 02 00009000 00006000
+I (30) boot:  1 phy_init         RF data          01 01 0000f000 00001000
+I (31) boot:  2 factory          factory app      00 00 00010000 00100000
+I (32) boot: End of partition table
+I (33) esp_image: segment 0: paddr=00010020 vaddr=3c020020 size=0a094h ( 41108) map
+I (41) esp_image: segment 1: paddr=0001a0bc vaddr=3fc8c800 size=01ac4h (  6852) load
+I (42) esp_image: segment 2: paddr=0001bb88 vaddr=40380000 size=04490h ( 17552) load
+I (46) esp_image: segment 3: paddr=00020020 vaddr=42000020 size=15470h ( 87152) map
+I (61) esp_image: segment 4: paddr=00035498 vaddr=40384490 size=08254h ( 33364) load
+I (68) esp_image: segment 5: paddr=0003d6f4 vaddr=50000000 size=00024h (    36) load
+I (73) boot: Loaded app from partition at offset 0x10000
+I (73) boot: Disabling RNG early entropy source...
+I (74) cpu_start: Unicore app
+I (83) cpu_start: Pro cpu start user code
+I (83) cpu_start: cpu freq: 160000000 Hz
+I (83) app_init: Application information:
+I (84) app_init: Project name:     epd_hello
+I (84) app_init: App version:      bfb9bda-dirty
+I (85) app_init: Compile time:     Oct 31 2026 01:34:29
+I (85) app_init: ELF file SHA256:  beedee015...
+I (86) app_init: ESP-IDF:          v6.1.0
+I (86) efuse_init: Min chip rev:     v0.3
+I (87) efuse_init: Max chip rev:     v1.99 
+I (87) efuse_init: Chip rev:         v0.4
+I (88) heap_init: Initializing. RAM available for dynamic allocation:
+I (89) heap_init: At 3FCA9120 len 00016EE0 (91 KiB): RAM
+I (89) heap_init: At 3FCC0000 len 0001C710 (113 KiB): Retention RAM
+I (90) heap_init: At 3FCDC710 len 00002950 (10 KiB): Retention RAM
+I (90) heap_init: At 50000024 len 00001FC4 (7 KiB): RTCRAM
+I (91) spi_flash: detected chip: generic
+I (91) spi_flash: flash io: dio
+I (92) sleep_gpio: Configure to isolate all GPIO pins in sleep state
+I (93) sleep_gpio: Enable automatic switching of GPIO sleep configuration
+I (94) main_task: Started on CPU0
+I (94) main_task: Calling app_main()
+I (94) epd_hello: ESP-IDF v6.1.0, target esp32c3
+I (94) epd_hello: free heap at start: 217636
+I (354) epd: hw init: ready(reset)=1 ready(power-on)=1
+I (354) epd: init done: 768x552, panel=A0, spi=8 MHz
+I (354) epd_hello: free heap after render: 216420
+I (354) epd_hello: start refresh (expect ~15-16 s)
+I (614) epd: hw init: ready(reset)=1 ready(power-on)=1
+I (614) epd: row 0/552 -> y=0
+I (634) epd: row 100/552 -> y=200
+I (664) epd: row 200/552 -> y=400
+I (694) epd: row 300/552 -> y=49
+I (724) epd: row 400/552 -> y=249
+I (754) epd: row 500/552 -> y=449
+I (15834) epd: refresh pass 1/1 done in 15064 ms
+I (15904) epd_hello: display result=ESP_OK total=15543 ms, free heap=216420
+I (15904) epd_hello: done; image is retained by the panel after power off
+I (15904) main_task: Returned from app_main()
