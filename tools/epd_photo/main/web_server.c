@@ -1,6 +1,7 @@
 #include "web_server.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "app_config.h"
@@ -81,6 +82,28 @@ static bool looks_like_jpeg(const uint8_t *buf, size_t len)
     return false;
 }
 
+/* 从查询串里取一个浮点参数，缺省或解析失败时保留原值 */
+static void query_float(httpd_req_t *req, const char *key, float *out)
+{
+    char q[160];
+    char val[24];
+
+    if (httpd_req_get_url_query_len(req) == 0) {
+        return;
+    }
+    if (httpd_req_get_url_query_str(req, q, sizeof(q)) != ESP_OK) {
+        return;
+    }
+    if (httpd_query_key_value(q, key, val, sizeof(val)) != ESP_OK) {
+        return;
+    }
+    char *end = NULL;
+    const float v = strtof(val, &end);
+    if (end != val) {
+        *out = v;
+    }
+}
+
 static esp_err_t upload_post(httpd_req_t *req)
 {
     httpd_resp_set_type(req, "application/json; charset=utf-8");
@@ -123,7 +146,16 @@ static esp_err_t upload_post(httpd_req_t *req)
         return httpd_resp_sendstr(req, "{\"ok\":false,\"msg\":\"不是有效的 JPEG\"}");
     }
 
-    if (app_jobs_submit_upload(buf, got) != ESP_OK) {
+    epd_img_params_t params = EPD_IMG_PARAMS_DEFAULT();
+    query_float(req, "expo", &params.exposure);
+    query_float(req, "gamma", &params.gamma);
+    query_float(req, "con", &params.contrast);
+    query_float(req, "sat", &params.saturation);
+    epd_img_params_clamp(&params);
+    ESP_LOGI(TAG, "画质：曝光 %.2f gamma %.2f 对比度 %.2f 饱和 %.2f",
+             params.exposure, params.gamma, params.contrast, params.saturation);
+
+    if (app_jobs_submit_upload(buf, got, &params) != ESP_OK) {
         free(buf);
         httpd_resp_set_status(req, "503 Service Unavailable");
         return httpd_resp_sendstr(req, "{\"ok\":false,\"msg\":\"设备忙\"}");

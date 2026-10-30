@@ -20,18 +20,11 @@
 #include "tjpgd.h"
 
 #include "epd_se0398nz07.h"
+#include "image_pipeline.h"
 
 static const char *TAG = "jpeg";
 
 #define JD_POOL_SIZE 4096
-
-/* 面板四色，按 R/G/B 排列，用于最近色量化 */
-static const int k_palette[4][3] = {
-    {0, 0, 0},       /* EPD_BLACK  */
-    {255, 255, 255}, /* EPD_WHITE  */
-    {255, 200, 0},   /* EPD_YELLOW */
-    {190, 25, 40},   /* EPD_RED    */
-};
 
 typedef struct {
     const uint8_t *data;
@@ -64,50 +57,24 @@ static size_t jd_in(JDEC *jd, uint8_t *buf, size_t n)
     return n;
 }
 
-static int clamp255(int v)
-{
-    return v < 0 ? 0 : (v > 255 ? 255 : v);
-}
-
-/* 最近色量化 + 4x4 Bayer 抖动，缓解照片渐变处的断层 */
-static epd_color_t quantize(int r, int g, int b, int x, int y)
-{
-    static const int8_t k_bayer[4][4] = {
-        {0, 8, 2, 10},
-        {12, 4, 14, 6},
-        {3, 11, 1, 9},
-        {15, 7, 13, 5},
-    };
-    const int d = (k_bayer[y & 3][x & 3] - 8) * 5; /* ±40 */
-
-    r = clamp255(r + d);
-    g = clamp255(g + d);
-    b = clamp255(b + d);
-
-    int best = EPD_WHITE;
-    int best_dist = INT_MAX;
-    for (int i = 0; i < 4; ++i) {
-        const int dr = r - k_palette[i][0];
-        const int dg = g - k_palette[i][1];
-        const int db = b - k_palette[i][2];
-        const int dist = dr * dr + dg * dg + db * db;
-        if (dist < best_dist) {
-            best_dist = dist;
-            best = i;
-        }
-    }
-    return (epd_color_t)best;
-}
-
 static int jd_out(JDEC *jd, void *bitmap, JRECT *rect)
 {
     const int rw = rect->right - rect->left + 1;
     const uint8_t *px = (const uint8_t *)bitmap;
 
-    int dx0 = (int)floorf((rect->left - s_off_x) * s_scale);
-    int dy0 = (int)floorf((rect->top - s_off_y) * s_scale);
-    int dx1 = (int)ceilf((rect->right + 1 - s_off_x) * s_scale);
-    int dy1 = (int)ceilf((rect->bottom + 1 - s_off_y) * s_scale);
+    /* MCU 块覆盖的是连续区间 [left, right+1) x [top, bottom+1)。
+     * 注意不能写成 `sy > rect->bottom`：像素中心是 bottom+0.5，会被判成块外，
+     * 于是每个 16x16 块的最后一行/列都被丢掉，帧缓冲预填白 →
+     * 全屏 16 像素周期的白色格栅（2026-10-31 实板现象）。 */
+    const float left = (float)rect->left;
+    const float right1 = (float)rect->right + 1.0f;
+    const float top = (float)rect->top;
+    const float bottom1 = (float)rect->bottom + 1.0f;
+
+    int dx0 = (int)floorf((left - s_off_x) * s_scale);
+    int dy0 = (int)floorf((top - s_off_y) * s_scale);
+    int dx1 = (int)ceilf((right1 - s_off_x) * s_scale);
+    int dy1 = (int)ceilf((bottom1 - s_off_y) * s_scale);
 
     if (dx0 < 0) {
         dx0 = 0;
@@ -123,19 +90,29 @@ static int jd_out(JDEC *jd, void *bitmap, JRECT *rect)
     }
 
     for (int dy = dy0; dy < dy1; ++dy) {
-        const float sy = s_off_y + (dy + 0.5f) * s_inv_scale;
-        if (sy < rect->top || sy > rect->bottom) {
+        const float sy = s_off_y + ((float)dy + 0.5f) * s_inv_scale;
+        if (sy < top - 1e-3f || sy >= bottom1 + 1e-3f) {
             continue;
         }
-        const int iy = (int)sy - rect->top;
+        int iy = (int)(sy - top);
+        if (iy < 0) {
+            iy = 0;
+        } else if (iy > rect->bottom - rect->top) {
+            iy = rect->bottom - rect->top;
+        }
         for (int dx = dx0; dx < dx1; ++dx) {
-            const float sx = s_off_x + (dx + 0.5f) * s_inv_scale;
-            if (sx < rect->left || sx > rect->right) {
+            const float sx = s_off_x + ((float)dx + 0.5f) * s_inv_scale;
+            if (sx < left - 1e-3f || sx >= right1 + 1e-3f) {
                 continue;
             }
-            const int ix = (int)sx - rect->left;
+            int ix = (int)(sx - left);
+            if (ix < 0) {
+                ix = 0;
+            } else if (ix >= rw) {
+                ix = rw - 1;
+            }
             const uint8_t *p = px + (iy * rw + ix) * 3;
-            epd_set_pixel(dx, dy, quantize(p[0], p[1], p[2], dx, dy));
+            epd_set_pixel(dx, dy, epd_pipeline_pixel(p[0], p[1], p[2], dx, dy));
         }
     }
 
@@ -143,11 +120,14 @@ static int jd_out(JDEC *jd, void *bitmap, JRECT *rect)
 }
 
 esp_err_t epd_image_render_jpeg(const uint8_t *jpeg, size_t len,
+                                const epd_img_params_t *params,
                                 int *out_src_w, int *out_src_h)
 {
     if (jpeg == NULL || len < 4) {
         return ESP_ERR_INVALID_ARG;
     }
+
+    epd_pipeline_init(params);
 
     s_src.data = jpeg;
     s_src.len = len;

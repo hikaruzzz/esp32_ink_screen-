@@ -81,7 +81,9 @@
   - `epd_se0398nz07.c/h` 面板驱动（与 epd_hello 相同标定）
   - `font8x11.c/h` ASCII 8x11 点阵（主机侧生成，覆盖 0x20~0x7E）
   - `screen_ui.c` 热点状态页（SSID / 密码 / 地址 / 按键提示）
-  - `image_decode.c` tjpgd 逐 MCU 解码 → cover 裁切 → 四色量化（4x4 Bayer 抖动）
+  - `image_decode.c` tjpgd 逐 MCU 解码 → cover 裁切 → 交给 `image_pipeline.c` 量化
+  - `image_pipeline.c/h` 四色量化：色调 LUT（曝光/对比度/gamma）→ 线性光下投影到
+    四色凸包最合适的边 → 按蓝噪声阈值选两色之一；参数由网页画质滑块下发
   - `app_jobs.c` 显示队列：重刷 / 上传解码 / 切换热点全部串行，独占面板与 SPI
   - `web_server.c` HTTP：`GET /`、`GET /status`、`POST /upload`(裸 JPEG)、`/config`、`/config/reset`、`/reboot`
   - `wifi_ap.c` AP 启停；`button.c` BOOT 键短按（GPIO9）
@@ -100,5 +102,41 @@
   - 目视画面（开机状态页、上传照片的四色效果）
   - BOOT 键切换热点实机验证（关→开 后手机需重连）
   - 手机浏览器端完整流程（选图/预览/压缩/进度）
+
+## 显示效果优化（2026-10-31 晚，未上板验证）
+
+用户反馈：功能正常，但画面偏黑失真，整屏有白色格栅。
+
+- 观察事实：`tools/epd_preview.py --algo bayer4 --grid-bug` 可稳定复现
+  「16 像素周期白色格栅 + 整体偏黑」，与实拍一致（`evidence/M2/image_quality.png`）
+- 根因 1（格栅）：`image_decode.c` 里判断像素是否落在 MCU 块内写成
+  `sy > rect->bottom`，但块覆盖的是连续区间 `[top, bottom+1)`，像素中心是
+  `bottom+0.5` → 每个 16x16 块最后一行/列被丢弃；帧缓冲预填白 → 全屏白格栅。
+  浏览器上传的图正好是 768x552（s_scale=1），必然触发。
+  修复：按连续区间判断，越界索引用夹取兜底
+- 根因 2（偏黑失真）：理想色板 {0,0,0}/{255,255,255} + 每通道 ±40 的 4x4 Bayer
+  → 中间调按 sRGB 50/50 撒黑白点，墨水屏黑点视觉权重大，再叠高频噪点
+- 新管线（`image_pipeline.c`，与 `tools/epd_preview.py`、网页 JS 三处同算法）：
+  1. 实测色板近似：黑(32,32,32) 白(204,204,198) 黄(222,190,74) 红(166,62,52)
+     —— 用理想白 255 会让抖动持续追一个屏幕给不出的亮度
+  2. 色调曲线：饱和度 → 线性域曝光 → 绕中灰对比度 → gamma（合成 256 项 LUT）
+  3. 把像素投影到四色凸包的 6 条边上，取残差最小的一条，得到两色混合比例 w
+  4. 16x16 蓝噪声（void-and-cluster）阈值 < w 选 a 端，否则 b 端；
+     线性光下混合，纸面亮度才正确，且没有 Bayer 的规则格点
+- 可调参数（网页“画质”卡片，随 `/upload?expo=&gamma=&con=&sat=` 下发）：
+  曝光 0.6~2.2（默认 1.35）、明暗 0.7~1.8（1.10）、对比度 0.7~1.4（1.05）、
+  饱和度 0~1.8（1.25）；浏览器 localStorage 记住上次取值
+- 主机侧工具：`python tools/epd_preview.py 图片.jpg [-o out.png]`
+  可用 `--algo bayer4 --grid-bug` 复现旧问题，`--exposure/--gamma/--contrast/--sat`
+  调参，输出 PNG 直接看效果，不必烧录等 15 秒刷屏
+- 一致性验证：把 `web/index.html` 的 `<script>` 抠出来在 node 里跑，
+  与 numpy 参考实现逐像素比对一致率 99.92%（差异只来自浮点取整阈值）
+- 已编译：`epd_photo.bin` 0xe5030 字节，分区余量 54%；**未烧录**（板子已断开）
+- 下次上板要确认：
+  - 白格栅是否消失
+  - 默认参数下的亮度是否合适，不合适用画质滑块往「亮度」方向调
+  - 色板四项数值是否贴近实屏（可先目视对比，再改 `image_pipeline.c` 的
+    `k_pal_srgb` 与网页 `PAL`，两处必须同步）
+  - 解码耗时是否明显变长（6 条边 × 每像素浮点运算，预计比原来多几百毫秒到 1 秒）
 - 备注：`tools/capture.py` 打开端口时原本会拉高 RTS/DTR，等于把 C3 按在复位里
   （表现为串口静默、热点消失）；已改为先置低再 open，需要复位时用 `--reset`

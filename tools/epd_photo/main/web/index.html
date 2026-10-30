@@ -67,6 +67,29 @@
     border: 1px solid var(--line); border-radius: 9px;
   }
   .hint { font-size: 12px; color: var(--dim); margin-top: 6px; }
+
+  .qhead {
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 14px; font-weight: 600; margin-bottom: 4px;
+  }
+  .qrow {
+    display: grid; grid-template-columns: 46px 1fr 42px;
+    align-items: center; gap: 10px; margin-top: 10px;
+    font-size: 13px; color: var(--dim);
+  }
+  .qrow b { color: var(--text); font-weight: 500; text-align: right; font-variant-numeric: tabular-nums; }
+  input[type=range] {
+    -webkit-appearance: none; appearance: none; width: 100%; height: 22px;
+    background: transparent; margin: 0;
+  }
+  input[type=range]::-webkit-slider-runnable-track {
+    height: 4px; border-radius: 2px; background: #3a3a3a;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%;
+    background: var(--accent); margin-top: -7px; border: 0;
+  }
+  button.small { flex: none; padding: 5px 10px; font-size: 12px; font-weight: 500; }
 </style>
 </head>
 <body>
@@ -84,6 +107,18 @@
   </div>
   <input id="file" type="file" accept="image/*">
   <div class="meta" id="size"></div>
+</div>
+
+<div class="card">
+  <div class="qhead">
+    <span>画质</span>
+    <button class="ghost small" id="qreset">恢复默认</button>
+  </div>
+  <div class="qrow"><span>亮度</span><input id="qexpo" type="range" min="0.6" max="2.2" step="0.05" value="1.35"><b id="vexpo">1.35</b></div>
+  <div class="qrow"><span>明暗</span><input id="qgamma" type="range" min="0.7" max="1.8" step="0.02" value="1.10"><b id="vgamma">1.10</b></div>
+  <div class="qrow"><span>对比度</span><input id="qcon" type="range" min="0.7" max="1.4" step="0.02" value="1.05"><b id="vcon">1.05</b></div>
+  <div class="qrow"><span>饱和度</span><input id="qsat" type="range" min="0" max="1.8" step="0.05" value="1.25"><b id="vsat">1.25</b></div>
+  <div class="meta">预览实时更新；参数随图片一起下发给设备，不用重启。</div>
 </div>
 
 <div class="card">
@@ -113,48 +148,136 @@
 
 <script>
 const W = 768, H = 552, MAX_BYTES = 40 * 1024;
-const PAL = [[0,0,0],[255,255,255],[255,200,0],[190,25,40]];
-const BAYER = [[0,8,2,10],[12,4,14,6],[3,11,1,9],[15,7,13,5]];
+
+/* 面板四色（sRGB 近似）与 16x16 蓝噪声阈值表：
+ * 必须和固件 image_pipeline.c 里的 k_pal_srgb / s_bn 完全一致，
+ * 否则这里看到的预览和实屏对不上。 */
+const PAL = [[32,32,32],[204,204,198],[222,190,74],[166,62,52]];
+const BN = new Uint8Array([
+  22,229, 58,134, 30,250, 61,122, 24,159,206,133, 32,198, 63,243,
+  87,171,101,  8,209,153,218,  1,179,223, 92,254,176,103,215,130,
+  18,202, 43,186, 74, 91, 49,141, 70,115, 46,148, 73, 13, 40,158,
+  79,142,249,124,166,239,192,102,232, 20,200,230,125,188,113,224,
+  33,109, 64,221, 26,118, 17,162, 35,140, 62,168, 28,246, 59,174,
+ 241,210,154, 11,190, 83, 54,213, 86,189,108, 10, 97,208,129,  0,
+  88,183, 51, 98,138,248,173,126,  6,156, 42,222, 78,161, 48,147,
+  69,123,233,164, 67,204, 38,227, 72,237,196,136,181,236,104,197,
+  25,253,207, 37,  7,121, 94,150, 23,116, 90,255, 31, 65, 15,219,
+ 139, 82,146,105,180,231,169,216,251,175, 53,127,214,152,120,172,
+   5,187, 52, 21, 85, 57, 44,132, 76,201,  2,163, 80,247, 41, 93,
+ 225,114,240,193,157,245,199, 12,107,143, 56,228,106,184,203, 60,
+  36,167, 66,131, 29,117, 89,182, 34,244, 95,194, 27,137, 16,155,
+ 128,211, 96,220,  4,144,226, 68,165,212, 50,149,252, 71,100,235,
+  77, 14, 47,177, 75,205, 39, 19,135,111,  9,178,119,217, 45,185,
+ 110,195,151,242,112,170, 99,191,238, 81, 55,234, 84,160,  3,145,
+]);
 
 const $ = id => document.getElementById(id);
-const cv = $('cv'), ctx = cv.getContext('2d');
-let bitmap = null, srcCanvas = null, busy = false;
+const cv = $('cv'), ctx = cv.getContext('2d', { willReadFrequently: true });
+let bitmap = null, busy = false, previewTimer = 0;
 
-/* ---------- 预览：按 cover 裁切 + 模拟四色 ---------- */
+const clamp = v => v < 0 ? 0 : (v > 255 ? 255 : v);
+const srgbToLin = v => v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+const linToSrgb = v => {
+  if (v <= 0) return 0;
+  if (v >= 1) return 1;
+  return v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055;
+};
+
+const LIN = new Float32Array(256);
+for (let i = 0; i < 256; i++) LIN[i] = srgbToLin(i / 255);
+
+/* 四色凸包的六条边：沿着边做两色混合，w 是 a 端的覆盖比例 */
+const EDGES = [];
+{
+  const lin = PAL.map(c => c.map(v => srgbToLin(v / 255)));
+  for (let i = 0; i < 4; i++) {
+    for (let j = i + 1; j < 4; j++) {
+      const d = [lin[i][0] - lin[j][0], lin[i][1] - lin[j][1], lin[i][2] - lin[j][2]];
+      const den = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
+      EDGES.push({ a: i, b: j, pj: lin[j], d, inv: 1 / den });
+    }
+  }
+}
+
+function quality() {
+  return {
+    expo: +$('qexpo').value,
+    gamma: +$('qgamma').value,
+    con: +$('qcon').value,
+    sat: +$('qsat').value,
+  };
+}
+
+/* sRGB 8 位 -> 调色后 sRGB 8 位（曝光/对比度/gamma 合并成一张表） */
+function toneLUT(q) {
+  const t = new Uint8Array(256);
+  for (let i = 0; i < 256; i++) {
+    let s = linToSrgb(LIN[i] * q.expo);
+    s = Math.min(1, Math.max(0, 0.5 + (s - 0.5) * q.con));
+    s = Math.pow(s, 1 / q.gamma);
+    t[i] = Math.round(s * 255);
+  }
+  return t;
+}
+
 function coverParams(iw, ih) {
   const s = Math.max(W / iw, H / ih);
   const sw = W / s, sh = H / s;
   return { sx: (iw - sw) / 2, sy: (ih - sh) / 2, sw, sh };
 }
 
+/* ---------- 预览：cover 裁切 + 与固件相同的四色量化 ---------- */
 function renderPreview() {
+  if (!bitmap) return;
   const { sx, sy, sw, sh } = coverParams(bitmap.width, bitmap.height);
   ctx.fillStyle = '#fff';
   ctx.fillRect(0, 0, W, H);
   ctx.drawImage(bitmap, sx, sy, sw, sh, 0, 0, W, H);
 
+  const q = quality();
+  const tone = toneLUT(q);
   const img = ctx.getImageData(0, 0, W, H);
   const d = img.data;
+
   for (let y = 0; y < H; y++) {
+    const bnRow = (y & 15) * 16;
     for (let x = 0; x < W; x++) {
       const i = (y * W + x) * 4;
-      const t = (BAYER[y & 3][x & 3] - 8) * 5;
-      const r = clamp(d[i] + t), g = clamp(d[i+1] + t), b = clamp(d[i+2] + t);
-      let best = 1, bd = Infinity;
-      for (let p = 0; p < 4; p++) {
-        const dr = r - PAL[p][0], dg = g - PAL[p][1], db = b - PAL[p][2];
-        const dist = dr*dr + dg*dg + db*db;
-        if (dist < bd) { bd = dist; best = p; }
+      const r = d[i], g = d[i + 1], b = d[i + 2];
+      const luma = (299 * r + 587 * g + 114 * b + 500) / 1000 | 0;
+      const ri = clamp(Math.round(luma + (r - luma) * q.sat));
+      const gi = clamp(Math.round(luma + (g - luma) * q.sat));
+      const bi = clamp(Math.round(luma + (b - luma) * q.sat));
+      const tr = LIN[tone[ri]], tg = LIN[tone[gi]], tb = LIN[tone[bi]];
+
+      let bestErr = Infinity, bestW = 0, best = 0;
+      for (let e = 0; e < 6; e++) {
+        const ed = EDGES[e];
+        let w = ((tr - ed.pj[0]) * ed.d[0] + (tg - ed.pj[1]) * ed.d[1] +
+                 (tb - ed.pj[2]) * ed.d[2]) * ed.inv;
+        w = w < 0 ? 0 : (w > 1 ? 1 : w);
+        const dr = tr - (ed.pj[0] + w * ed.d[0]);
+        const dg = tg - (ed.pj[1] + w * ed.d[1]);
+        const db = tb - (ed.pj[2] + w * ed.d[2]);
+        const err = dr * dr + dg * dg + db * db;
+        if (err < bestErr) { bestErr = err; bestW = w; best = e; }
       }
-      d[i] = PAL[best][0]; d[i+1] = PAL[best][1]; d[i+2] = PAL[best][2];
+
+      const c = BN[bnRow + (x & 15)] / 255 < bestW ? EDGES[best].a : EDGES[best].b;
+      d[i] = PAL[c][0]; d[i + 1] = PAL[c][1]; d[i + 2] = PAL[c][2]; d[i + 3] = 255;
     }
   }
+
   ctx.putImageData(img, 0, 0);
   $('ph').style.display = 'none';
   cv.style.display = 'block';
 }
 
-const clamp = v => v < 0 ? 0 : (v > 255 ? 255 : v);
+function schedulePreview() {
+  clearTimeout(previewTimer);
+  previewTimer = setTimeout(renderPreview, 120);
+}
 
 /* ---------- 编码到 90 KB 以内 ---------- */
 function toBlob(canvas, q) {
@@ -225,8 +348,10 @@ async function upload() {
   $('size').textContent = `上传尺寸 ${blob.size / 1024 | 0} KB`;
   $('state').textContent = '上传中…';
 
+  const q = quality();
+  const url = `/upload?expo=${q.expo}&gamma=${q.gamma}&con=${q.con}&sat=${q.sat}`;
   try {
-    const r = await fetch('/upload', {
+    const r = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'image/jpeg' },
       body: blob
@@ -279,6 +404,43 @@ $('file').addEventListener('change', async e => {
 });
 
 $('send').addEventListener('click', upload);
+
+/* ---------- 画质滑块 ---------- */
+const QSLIDERS = [['qexpo', 'vexpo', 2], ['qgamma', 'vgamma', 2],
+                  ['qcon', 'vcon', 2], ['qsat', 'vsat', 2]];
+const QDEFAULT = { qexpo: 1.35, qgamma: 1.10, qcon: 1.05, qsat: 1.25 };
+
+function syncQLabels() {
+  for (const [id, out, digits] of QSLIDERS) {
+    $(out).textContent = (+$(id).value).toFixed(digits);
+  }
+}
+
+function saveQuality() {
+  try { localStorage.setItem('epdQuality', JSON.stringify(quality())); } catch (_) {}
+}
+
+for (const [id] of QSLIDERS) {
+  $(id).addEventListener('input', () => { syncQLabels(); saveQuality(); schedulePreview(); });
+}
+
+$('qreset').addEventListener('click', () => {
+  for (const [id] of QSLIDERS) $(id).value = QDEFAULT[id];
+  syncQLabels();
+  saveQuality();
+  schedulePreview();
+});
+
+/* 上次调好的参数存在浏览器里，刷新页面不用重调 */
+try {
+  const saved = JSON.parse(localStorage.getItem('epdQuality') || '{}');
+  const map = { qexpo: 'expo', qgamma: 'gamma', qcon: 'con', qsat: 'sat' };
+  for (const [id, key] of Object.entries(map)) {
+    if (typeof saved[key] === 'number') $(id).value = saved[key];
+  }
+} catch (_) {}
+
+syncQLabels();
 
 $('save').addEventListener('click', async () => {
   const body = new URLSearchParams({ ssid: $('ssid').value.trim(), password: $('pass').value });

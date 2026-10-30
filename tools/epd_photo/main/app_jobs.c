@@ -27,6 +27,8 @@ typedef struct {
     job_type_t type;
     uint8_t *data;
     size_t len;
+    bool has_params;
+    epd_img_params_t params;
 } job_t;
 
 static QueueHandle_t s_queue;
@@ -101,12 +103,17 @@ esp_err_t app_jobs_submit_refresh(void)
     return queue_push(job);
 }
 
-esp_err_t app_jobs_submit_upload(uint8_t *data, size_t len)
+esp_err_t app_jobs_submit_upload(uint8_t *data, size_t len,
+                                 const epd_img_params_t *params)
 {
     if (s_queue == NULL || data == NULL) {
         return ESP_ERR_INVALID_STATE;
     }
-    const job_t job = {.type = JOB_UPLOAD, .data = data, .len = len};
+    job_t job = {.type = JOB_UPLOAD, .data = data, .len = len};
+    if (params != NULL) {
+        job.params = *params;
+        job.has_params = true;
+    }
     return queue_push(job);
 }
 
@@ -151,7 +158,8 @@ static void display_task(void *arg)
         case JOB_UPLOAD: {
             set_status("decoding", "正在解码图片");
             int w = 0, h = 0;
-            const esp_err_t err = epd_image_render_jpeg(job.data, job.len, &w, &h);
+            const esp_err_t err = epd_image_render_jpeg(
+                job.data, job.len, job.has_params ? &job.params : NULL, &w, &h);
             free(job.data);
             if (err != ESP_OK) {
                 ESP_LOGE(TAG, "解码失败 %s", esp_err_to_name(err));

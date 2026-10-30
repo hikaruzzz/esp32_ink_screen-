@@ -9,6 +9,7 @@ idf_component_register(
         "wifi_ap.c"
         "button.c"
         "image_decode.c"
+        "image_pipeline.c"
         "web_server.c"
     INCLUDE_DIRS "."
     EMBED_TXTFILES "web/index.html"
