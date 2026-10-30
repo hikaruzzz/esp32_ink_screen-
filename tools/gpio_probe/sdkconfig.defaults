@@ -1,0 +1,5 @@
+# ESP32-C3 SuperMini (HW-466AB) 诊断工程默认配置
+# 主控制台走原生 USB Serial/JTAG（板卡无 USB-UART 桥）
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+# Flash 4 MB（esptool 实测确认：内嵌 XMC 4MB）
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y

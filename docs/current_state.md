@@ -29,3 +29,15 @@
 - 下一步：
   1. 执行 M1-09：烧录当前固件挂机 1 小时，采集心跳并检查复位/堆趋势
   2. 用户确定传感器型号与 I2C 引脚 → 实现 `sensor_i2c.c`（总线初始化/探测/读取），关闭 `CONFIG_APP_SENSOR_MOCK`
+
+## 诊断工程：gpio_probe（2026-10-31）
+
+- 位置：`tools/gpio_probe/`（独立 ESP-IDF 工程，不修改根目录固件）
+- 目的：ReinkCase 四色墨水屏接线电平观察（屏板丝印 `DC24_NFC_V1.0CX`）
+- 接线（用户提供，未实测）：DIN=GPIO7、CLK=GPIO6、CS=GPIO10、DC=GPIO3、RST=GPIO4、BUSY=GPIO5
+- 行为：六脚全部配置为输入、禁用内部上拉/下拉；每秒打印运行计数与电平；
+  **不发送任何屏幕初始化或刷新指令**
+- 构建：`idf.py -C tools/gpio_probe build`（ESP-IDF v6.1，target esp32c3，USB Serial/JTAG 控制台）
+- 固件：`tools/gpio_probe/build/gpio_probe.bin`，147840 B，sha256 `7711f910b333ff2bdb3907b43f1be037b7e15e9c4083cfe6d35af7c9664d4a77`
+- 结果：编译通过（无源码告警）；烧录与实板观察未执行
+- 烧录：`idf.py -C tools/gpio_probe -p COM4 flash`
