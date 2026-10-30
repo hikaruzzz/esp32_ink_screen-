@@ -38,6 +38,13 @@
 - 行为：六脚全部配置为输入、禁用内部上拉/下拉；每秒打印运行计数与电平；
   **不发送任何屏幕初始化或刷新指令**
 - 构建：`idf.py -C tools/gpio_probe build`（ESP-IDF v6.1，target esp32c3，USB Serial/JTAG 控制台）
-- 固件：`tools/gpio_probe/build/gpio_probe.bin`，147840 B，sha256 `7711f910b333ff2bdb3907b43f1be037b7e15e9c4083cfe6d35af7c9664d4a77`
-- 结果：编译通过（无源码告警）；烧录与实板观察未执行
+- 固件：`tools/gpio_probe/build/gpio_probe.bin`（第二版增加每秒 500 ms 高频边沿计数）
+- 实板结果（2026-10-31，COM4）：
+  - `RST=1`、`DIN=0`、`CLK=0`、`CS=0`、`BUSY=0`，30 s 内零边沿 → 被外部拉住或驱动
+  - `DC` 报告值恒为 1，但 500 ms 窗口内有 50–96 次边沿（≈50 Hz）→ 悬空拾噪，
+    第一次 1 s 采样看到的 9 s/15 s 电平变化是悬空节点偏置漂移
+  - 结论：屏板已供电、控制器处于空闲态；未观察到 SPI 刷新突发，原主控未在刷屏
+  - 日志：`evidence/M1/screen_probe_boot.log`、`evidence/M1/screen_probe_edges.log`
+- 风险：`DIN/CLK/CS` 若仍被原手机壳 MCU 推挽驱动，直接驱动会冲突；
+  需实物确认原 MCU 是否已拆除（拆机资料做法是拆掉 MCU 后飞线）
 - 烧录：`idf.py -C tools/gpio_probe -p COM4 flash`

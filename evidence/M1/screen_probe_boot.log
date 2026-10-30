@@ -1,0 +1,97 @@
+ESP-ROM:esp32c3-api1-20210207
+Build:Feb  7 2021
+rst:0x15 (USB_UART_CHIP_RESET),boot:0xf (SPI_FAST_FLASH_BOOT)
+Saved PC:0x403833ea
+SPIWP:0xee
+mode:DIO, clock div:1
+load:0x3fcd5830,len:0x1598
+load:0x403cbf10,len:0xccc
+load:0x403ce710,len:0x302c
+entry 0x403cbf1a
+I (24) boot: ESP-IDF v6.1.0 2nd stage bootloader
+I (24) boot: compile time Oct 31 2026 00:56:25
+I (25) boot: chip revision: v0.4
+I (25) boot: efuse block revision: v1.3
+I (26) boot.esp32c3: SPI Speed      : 80MHz
+I (26) boot.esp32c3: SPI Mode       : DIO
+I (27) boot.esp32c3: SPI Flash Size : 4MB
+I (27) boot: Enabling RNG early entropy source...
+I (28) boot: Partition Table:
+I (28) boot: ## Label            Usage          Type ST Offset   Length
+I (29) boot:  0 nvs              WiFi data        01 02 00009000 00006000
+I (30) boot:  1 phy_init         RF data          01 01 0000f000 00001000
+I (31) boot:  2 factory          factory app      00 00 00010000 00100000
+I (32) boot: End of partition table
+I (33) esp_image: segment 0: paddr=00010020 vaddr=3c020020 size=07ffch ( 32764) map
+I (39) esp_image: segment 1: paddr=00018024 vaddr=3fc89a00 size=01954h (  6484) load
+I (41) esp_image: segment 2: paddr=00019980 vaddr=40380000 size=06698h ( 26264) load
+I (47) esp_image: segment 3: paddr=00020020 vaddr=42000020 size=10dfch ( 69116) map
+I (58) esp_image: segment 4: paddr=00030e24 vaddr=40386698 size=03308h ( 13064) load
+I (61) esp_image: segment 5: paddr=00034134 vaddr=50000000 size=00024h (    36) load
+I (65) boot: Loaded app from partition at offset 0x10000
+I (65) boot: Disabling RNG early entropy source...
+I (66) cpu_start: Unicore app
+I (74) cpu_start: Pro cpu start user code
+I (74) cpu_start: cpu freq: 160000000 Hz
+I (75) app_init: Application information:
+I (75) app_init: Project name:     gpio_probe
+I (76) app_init: App version:      e35de3f
+I (76) app_init: Compile time:     Oct 31 2026 01:02:15
+I (77) app_init: ELF file SHA256:  bebc3301a...
+I (77) app_init: ESP-IDF:          v6.1.0
+I (78) efuse_init: Min chip rev:     v0.3
+I (78) efuse_init: Max chip rev:     v1.99 
+I (79) efuse_init: Chip rev:         v0.4
+I (79) heap_init: Initializing. RAM available for dynamic allocation:
+I (80) heap_init: At 3FC8C370 len 00033C90 (207 KiB): RAM
+I (81) heap_init: At 3FCC0000 len 0001C710 (113 KiB): Retention RAM
+I (82) heap_init: At 3FCDC710 len 00002950 (10 KiB): Retention RAM
+I (82) heap_init: At 50000024 len 00001FC4 (7 KiB): RTCRAM
+I (83) spi_flash: detected chip: generic
+I (83) spi_flash: flash io: dio
+I (84) sleep_gpio: Configure to isolate all GPIO pins in sleep state
+I (84) sleep_gpio: Enable automatic switching of GPIO sleep configuration
+I (86) main_task: Started on CPU0
+I (86) main_task: Calling app_main()
+I (86) gpio_probe: gpio_probe: ESP-IDF v6.1.0, target esp32c3
+I (86) gpio_probe: mode: INPUT only, internal pull-up/down disabled, no panel commands
+I (86) gpio_probe: probe DIN  = GPIO7
+I (86) gpio_probe: probe CLK  = GPIO6
+I (86) gpio_probe: probe CS   = GPIO10
+I (86) gpio_probe: probe DC   = GPIO3
+I (86) gpio_probe: probe RST  = GPIO4
+I (86) gpio_probe: probe BUSY = GPIO5
+I (86) gpio_probe: t=0 s levels=0x1a DIN(7)=0 CLK(6)=1 CS(10)=0 DC(3)=1 RST(4)=1 BUSY(5)=0
+I (1086) gpio_probe: t=1 s levels=0x18 DIN(7)=0 CLK(6)=0 CS(10)=0 DC(3)=1 RST(4)=1 BUSY(5)=0
+W (1086) gpio_probe: level change 0x1a -> 0x18
+I (2086) gpio_probe: t=2 s levels=0x18 DIN(7)=0 CLK(6)=0 CS(10)=0 DC(3)=1 RST(4)=1 BUSY(5)=0
+I (3086) gpio_probe: t=3 s levels=0x18 DIN(7)=0 CLK(6)=0 CS(10)=0 DC(3)=1 RST(4)=1 BUSY(5)=0
+I (4086) gpio_probe: t=4 s levels=0x18 DIN(7)=0 CLK(6)=0 CS(10)=0 DC(3)=1 RST(4)=1 BUSY(5)=0
+I (5086) gpio_probe: t=5 s levels=0x18 DIN(7)=0 CLK(6)=0 CS(10)=0 DC(3)=1 RST(4)=1 BUSY(5)=0
+I (6086) gpio_probe: t=6 s levels=0x18 DIN(7)=0 CLK(6)=0 CS(10)=0 DC(3)=1 RST(4)=1 BUSY(5)=0
+I (7086) gpio_probe: t=7 s levels=0x18 DIN(7)=0 CLK(6)=0 CS(10)=0 DC(3)=1 RST(4)=1 BUSY(5)=0
+I (8086) gpio_probe: t=8 s levels=0x18 DIN(7)=0 CLK(6)=0 CS(10)=0 DC(3)=1 RST(4)=1 BUSY(5)=0
+I (9086) gpio_probe: t=9 s levels=0x10 DIN(7)=0 CLK(6)=0 CS(10)=0 DC(3)=0 RST(4)=1 BUSY(5)=0
+W (9086) gpio_probe: level change 0x18 -> 0x10
+I (10086) gpio_probe: t=10 s levels=0x10 DIN(7)=0 CLK(6)=0 CS(10)=0 DC(3)=0 RST(4)=1 BUSY(5)=0
+I (11086) gpio_probe: t=11 s levels=0x10 DIN(7)=0 CLK(6)=0 CS(10)=0 DC(3)=0 RST(4)=1 BUSY(5)=0
+I (12086) gpio_probe: t=12 s levels=0x10 DIN(7)=0 CLK(6)=0 CS(10)=0 DC(3)=0 RST(4)=1 BUSY(5)=0
+I (13086) gpio_probe: t=13 s levels=0x10 DIN(7)=0 CLK(6)=0 CS(10)=0 DC(3)=0 RST(4)=1 BUSY(5)=0
+I (14086) gpio_probe: t=14 s levels=0x10 DIN(7)=0 CLK(6)=0 CS(10)=0 DC(3)=0 RST(4)=1 BUSY(5)=0
+I (15086) gpio_probe: t=15 s levels=0x10 DIN(7)=0 CLK(6)=0 CS(10)=0 DC(3)=0 RST(4)=1 BUSY(5)=0
+I (16086) gpio_probe: t=16 s levels=0x10 DIN(7)=0 CLK(6)=0 CS(10)=0 DC(3)=0 RST(4)=1 BUSY(5)=0
+I (17086) gpio_probe: t=17 s levels=0x10 DIN(7)=0 CLK(6)=0 CS(10)=0 DC(3)=0 RST(4)=1 BUSY(5)=0
+I (18086) gpio_probe: t=18 s levels=0x10 DIN(7)=0 CLK(6)=0 CS(10)=0 DC(3)=0 RST(4)=1 BUSY(5)=0
+I (19086) gpio_probe: t=19 s levels=0x10 DIN(7)=0 CLK(6)=0 CS(10)=0 DC(3)=0 RST(4)=1 BUSY(5)=0
+I (20086) gpio_probe: t=20 s levels=0x10 DIN(7)=0 CLK(6)=0 CS(10)=0 DC(3)=0 RST(4)=1 BUSY(5)=0
+I (21086) gpio_probe: t=21 s levels=0x10 DIN(7)=0 CLK(6)=0 CS(10)=0 DC(3)=0 RST(4)=1 BUSY(5)=0
+I (22086) gpio_probe: t=22 s levels=0x10 DIN(7)=0 CLK(6)=0 CS(10)=0 DC(3)=0 RST(4)=1 BUSY(5)=0
+I (23086) gpio_probe: t=23 s levels=0x10 DIN(7)=0 CLK(6)=0 CS(10)=0 DC(3)=0 RST(4)=1 BUSY(5)=0
+I (24086) gpio_probe: t=24 s levels=0x18 DIN(7)=0 CLK(6)=0 CS(10)=0 DC(3)=1 RST(4)=1 BUSY(5)=0
+W (24086) gpio_probe: level change 0x10 -> 0x18
+I (25086) gpio_probe: t=25 s levels=0x18 DIN(7)=0 CLK(6)=0 CS(10)=0 DC(3)=1 RST(4)=1 BUSY(5)=0
+I (26086) gpio_probe: t=26 s levels=0x18 DIN(7)=0 CLK(6)=0 CS(10)=0 DC(3)=1 RST(4)=1 BUSY(5)=0
+I (27086) gpio_probe: t=27 s levels=0x18 DIN(7)=0 CLK(6)=0 CS(10)=0 DC(3)=1 RST(4)=1 BUSY(5)=0
+I (28086) gpio_probe: t=28 s levels=0x18 DIN(7)=0 CLK(6)=0 CS(10)=0 DC(3)=1 RST(4)=1 BUSY(5)=0
+I (29086) gpio_probe: t=29 s levels=0x18 DIN(7)=0 CLK(6)=0 CS(10)=0 DC(3)=1 RST(4)=1 BUSY(5)=0
+I (30086) gpio_probe: t=30 s levels=0x18 DIN(7)=0 CLK(6)=0 CS(10)=0 DC(3)=1 RST(4)=1 BUSY(5)=0
