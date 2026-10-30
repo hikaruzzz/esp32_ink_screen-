@@ -1,0 +1,11 @@
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
+# JPEG：C3 的 ROM 版本 jd_decomp 多一个 format 参数，且不导出 tjpgd.h；
+# 这里固定用组件自带的软件 tjpgd（逐 MCU 回调，RAM 占用低）。
+# 注意 esp_jpeg 的 Kconfig 里这些选项都依赖 !JD_USE_ROM。
+CONFIG_JD_USE_ROM=n
+CONFIG_JD_FORMAT_RGB888=y
+CONFIG_JD_USE_SCALE=y

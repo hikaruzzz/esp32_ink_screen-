@@ -1,6 +1,6 @@
 # 当前状态
 
-更新：2026-10-30
+更新：2026-10-31
 
 ## 下次恢复（关机/新会话后）
 
@@ -58,5 +58,47 @@
 - 实板（COM4）：`ready(reset)=1`、`ready(power-on)=1`；552 行传输完成；
   刷新 `15015 ms`；结果 `ESP_OK`；空闲堆 216420 B
 - 画面：白底 + 黄色边框 + 黑色 `Hello World` + 红色色条（四色映射验证）
-- 日志：`evidence/M1/epd_hello.log`
-- 待确认：目视画面是否正确；若呈规则条纹错位，改 `EPD_PANEL_IS_A1=1` 重编
+- 日志：`evidence/M1/epd_hello.log`，后续标定日志见 `evidence/M1/epd_hello_*.log`
+- **行映射标定结论（2026-10-31，A0 面板实测）**：
+  - 物理行 `p <= 299` → 偶数 RAM 行 `y = 2p`（偶数区驱动物理 0~299）
+  - 物理行 `p >= 300` → 奇数 RAM 行 `y = 2p - 599`（奇数区驱动物理 300~599，其中 552~599 不可见）
+  - 社区驱动 `y = 2p if p<=275 else 1103-2p` 的分界点在 275/276，实为错误：
+    下半区整体偏移 24 行、最后 24 行内容被挤出屏幕，多出的 24 行黑带由偶数 RAM 552~598 旧数据驱动
+  - 面板**不做**水平镜像、**不做**旋转；早期“下半区镜像”的判断是误判（自加镜像导致文字跑偏）
+  - 证据链：对称文字测试（伪影不随内容移动）→ 单黑带测试出现两条 → 数字标尺回读 →
+    上段 RAM 探针把杂色带变黑 → 推出奇偶栅极分组。证据见 `evidence/M1/epd_hello_upperram.log` 等
+- 已知特性：横屏看上下半区亮度略有差异（上半区稍暗）；两次刷新只能轻微改善，已作为面板特性接受
+- 待确认：A1 批次面板的栅极寻址（`EPD_PANEL_IS_A1` 未验证）
+
+## 墨水屏相框：epd_photo（2026-10-31）
+
+- 位置：`tools/epd_photo/`（独立工程，`idf.py -C tools/epd_photo build`）
+- 功能：开机建 SoftAP 热点 → 手机连上后打开 `http://192.168.4.1` 选图上传 →
+  设备解码成四色并刷屏；BOOT 键短按切换热点开关，热点打开时屏幕上显示 SSID 与密码
+- 配置：`main/app_config_local.h`（编译期默认值，已 gitignore，模板见 `.example`）+ NVS；
+  网页“高级设置”也能改，重启后生效；`POST /config/reset` 恢复默认
+- 代码结构：
+  - `epd_se0398nz07.c/h` 面板驱动（与 epd_hello 相同标定）
+  - `font8x11.c/h` ASCII 8x11 点阵（主机侧生成，覆盖 0x20~0x7E）
+  - `screen_ui.c` 热点状态页（SSID / 密码 / 地址 / 按键提示）
+  - `image_decode.c` tjpgd 逐 MCU 解码 → cover 裁切 → 四色量化（4x4 Bayer 抖动）
+  - `app_jobs.c` 显示队列：重刷 / 上传解码 / 切换热点全部串行，独占面板与 SPI
+  - `web_server.c` HTTP：`GET /`、`GET /status`、`POST /upload`(裸 JPEG)、`/config`、`/config/reset`、`/reboot`
+  - `wifi_ap.c` AP 启停；`button.c` BOOT 键短按（GPIO9）
+  - `main/web/index.html` 被 EMBED_TXTFILES 内嵌；浏览器端 cover 裁切 + 四色预览 + 压到 40 KB 以内
+- 关键约束：
+  - C3 的 ROM 带 TJpgDec，但 ROM 版 `jd_decomp` 多一个 format 参数且不导出 `tjpgd.h`；
+    `sdkconfig.defaults` 里固定 `CONFIG_JD_USE_ROM=n`，用组件自带 tjpgd（逐 MCU 回调，RAM 占用低）
+  - 上传上限 48 KB（Wi-Fi + httpd 起来后实测空闲堆约 82 KB），网页端压到 40 KB 以内
+- 已实测（COM4，2026-10-31）：
+  - 编译通过；固件 `epd_photo.bin` 0xe1670 字节，分区余量 55%
+  - 开机：热点 `EPD-Photo`（WPA2）、`http://192.168.4.1`、开机状态页刷新 15064 ms
+  - `GET /` 200；`GET /status` 返回 state/msg/src/heap/wifi/ssid
+  - `POST /upload` 38094 B → 200，0.16 s 收完；解码 768×552 用时约 2.9 s；刷新 15 s 后回到 `idle`
+  - 日志：`evidence/M2/boot2.log`、`evidence/M2/upload_toggle.log`
+- 待确认：
+  - 目视画面（开机状态页、上传照片的四色效果）
+  - BOOT 键切换热点实机验证（关→开 后手机需重连）
+  - 手机浏览器端完整流程（选图/预览/压缩/进度）
+- 备注：`tools/capture.py` 打开端口时原本会拉高 RTS/DTR，等于把 C3 按在复位里
+  （表现为串口静默、热点消失）；已改为先置低再 open，需要复位时用 `--reset`

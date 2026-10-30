@@ -1,0 +1,13 @@
+I (304654) wifi:station: 34:6f:24:28:89:6b join, AID=1, bgn, 40U
+I (304694) esp_netif_lwip: DHCP server assigned IP to a client, IP is: 192.168.4.2
+I (304764) wifi:<ba-add>idx:2 (ifx:1, 34:6f:24:28:89:6b), tid:0, ssn:18, winSize:64
+I (305094) web: 收到 38094 B，堆剩余 42016 B
+I (305094) jpeg: 源图 768x552，分量数 3
+I (305094) jpeg: 解码尺寸 768x552（scale=0），cover 比例 1.000，裁切起点 0.0,0.0
+I (307944) epd: hw init: ready(reset)=1 ready(power-on)=1
+I (307944) epd: row 0/552 -> y=0
+I (307964) epd: row 100/552 -> y=200
+I (307994) epd: row 200/552 -> y=400
+I (308024) epd: row 300/552 -> y=1
+I (308054) epd: row 400/552 -> y=201
+I (308084) epd: row 500/552 -> y=401

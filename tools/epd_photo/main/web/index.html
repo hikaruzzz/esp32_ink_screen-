@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>墨水屏相框</title>
+<style>
+  :root {
+    --bg: #121212;
+    --card: #1e1e1e;
+    --line: #333;
+    --text: #ececec;
+    --dim: #9a9a9a;
+    --accent: #f2c14e;
+    --ok: #58c47a;
+    --err: #e5655e;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 16px 14px 40px;
+    background: var(--bg); color: var(--text);
+    font: 15px/1.5 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  h1 { font-size: 19px; margin: 4px 0 2px; font-weight: 600; }
+  .sub { color: var(--dim); font-size: 13px; margin-bottom: 14px; }
+  .card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 14px; padding: 14px; margin-bottom: 14px;
+  }
+  .preview {
+    width: 100%; aspect-ratio: 768 / 552; border-radius: 8px;
+    background: #fff; display: block; image-rendering: pixelated;
+  }
+  .ph {
+    width: 100%; aspect-ratio: 768 / 552; border-radius: 8px;
+    background: #0d0d0d; border: 1px dashed var(--line);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--dim); font-size: 14px; text-align: center; padding: 20px;
+  }
+  .row { display: flex; gap: 10px; margin-top: 12px; }
+  button, .pick {
+    flex: 1; appearance: none; border: 0; border-radius: 10px;
+    padding: 13px 10px; font-size: 15px; font-weight: 600;
+    background: var(--accent); color: #1a1a1a; text-align: center;
+    cursor: pointer; user-select: none;
+  }
+  button:disabled { opacity: .45; }
+  button.ghost, .pick.ghost {
+    background: transparent; color: var(--text); border: 1px solid var(--line);
+  }
+  input[type=file] { display: none; }
+  .status { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--dim); flex: none; }
+  .dot.ok { background: var(--ok); }
+  .dot.busy { background: var(--accent); animation: blink 1s infinite; }
+  .dot.err { background: var(--err); }
+  @keyframes blink { 50% { opacity: .25; } }
+  .meta { color: var(--dim); font-size: 12px; margin-top: 8px; word-break: break-all; }
+  details summary {
+    cursor: pointer; color: var(--dim); font-size: 14px; outline: none;
+  }
+  label { display: block; font-size: 13px; color: var(--dim); margin: 12px 0 6px; }
+  input[type=text], input[type=password] {
+    width: 100%; padding: 11px 12px; font-size: 15px;
+    background: #151515; color: var(--text);
+    border: 1px solid var(--line); border-radius: 9px;
+  }
+  .hint { font-size: 12px; color: var(--dim); margin-top: 6px; }
+</style>
+</head>
+<body>
+
+<h1>墨水屏相框</h1>
+<div class="sub">选择一张照片，设备会把它转成黑/白/黄/红四色显示。</div>
+
+<div class="card">
+  <div id="ph" class="ph">还没有选择图片</div>
+  <canvas id="cv" class="preview" width="768" height="552" style="display:none"></canvas>
+
+  <div class="row">
+    <label class="pick" for="file">选择照片</label>
+    <button id="send" disabled>发送到屏幕</button>
+  </div>
+  <input id="file" type="file" accept="image/*">
+  <div class="meta" id="size"></div>
+</div>
+
+<div class="card">
+  <div class="status">
+    <span id="dot" class="dot"></span>
+    <span id="state">连接中…</span>
+  </div>
+  <div class="meta" id="detail"></div>
+</div>
+
+<div class="card">
+  <details>
+    <summary>高级设置</summary>
+    <label for="ssid">热点名称（SSID）</label>
+    <input id="ssid" type="text" maxlength="32" autocomplete="off">
+    <label for="pass">热点密码</label>
+    <input id="pass" type="password" maxlength="64" autocomplete="new-password"
+           placeholder="8 位以上；留空为开放热点">
+    <div class="hint">保存后需要重启设备才会生效。改完连不上时，可在断电重连后按默认值与 NVS 里的旧配置二选一排查。</div>
+    <div class="row">
+      <button class="ghost" id="save">保存</button>
+      <button class="ghost" id="reboot">重启设备</button>
+    </div>
+    <div class="meta" id="cfgmsg"></div>
+  </details>
+</div>
+
+<script>
+const W = 768, H = 552, MAX_BYTES = 40 * 1024;
+const PAL = [[0,0,0],[255,255,255],[255,200,0],[190,25,40]];
+const BAYER = [[0,8,2,10],[12,4,14,6],[3,11,1,9],[15,7,13,5]];
+
+const $ = id => document.getElementById(id);
+const cv = $('cv'), ctx = cv.getContext('2d');
+let bitmap = null, srcCanvas = null, busy = false;
+
+/* ---------- 预览：按 cover 裁切 + 模拟四色 ---------- */
+function coverParams(iw, ih) {
+  const s = Math.max(W / iw, H / ih);
+  const sw = W / s, sh = H / s;
+  return { sx: (iw - sw) / 2, sy: (ih - sh) / 2, sw, sh };
+}
+
+function renderPreview() {
+  const { sx, sy, sw, sh } = coverParams(bitmap.width, bitmap.height);
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, W, H);
+  ctx.drawImage(bitmap, sx, sy, sw, sh, 0, 0, W, H);
+
+  const img = ctx.getImageData(0, 0, W, H);
+  const d = img.data;
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const i = (y * W + x) * 4;
+      const t = (BAYER[y & 3][x & 3] - 8) * 5;
+      const r = clamp(d[i] + t), g = clamp(d[i+1] + t), b = clamp(d[i+2] + t);
+      let best = 1, bd = Infinity;
+      for (let p = 0; p < 4; p++) {
+        const dr = r - PAL[p][0], dg = g - PAL[p][1], db = b - PAL[p][2];
+        const dist = dr*dr + dg*dg + db*db;
+        if (dist < bd) { bd = dist; best = p; }
+      }
+      d[i] = PAL[best][0]; d[i+1] = PAL[best][1]; d[i+2] = PAL[best][2];
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  $('ph').style.display = 'none';
+  cv.style.display = 'block';
+}
+
+const clamp = v => v < 0 ? 0 : (v > 255 ? 255 : v);
+
+/* ---------- 编码到 90 KB 以内 ---------- */
+function toBlob(canvas, q) {
+  return new Promise(res => canvas.toBlob(res, 'image/jpeg', q));
+}
+
+async function encodeUnderLimit() {
+  for (const dim of [1, 0.8, 0.6, 0.45]) {
+    const cw = Math.round(W * dim), ch = Math.round(H * dim);
+    const c = document.createElement('canvas');
+    c.width = cw; c.height = ch;
+    const cx = c.getContext('2d');
+    cx.fillStyle = '#fff'; cx.fillRect(0, 0, cw, ch);
+
+    const { sx, sy, sw, sh } = coverParams(bitmap.width, bitmap.height);
+    cx.drawImage(bitmap, sx, sy, sw, sh, 0, 0, cw, ch);
+
+    for (const q of [0.8, 0.7, 0.6, 0.5, 0.4, 0.3]) {
+      const blob = await toBlob(c, q);
+      if (blob && blob.size <= MAX_BYTES) return blob;
+    }
+  }
+  return null;
+}
+
+/* ---------- 状态 ---------- */
+const DOTS = { idle: 'ok', decoding: 'busy', refreshing: 'busy', error: 'err' };
+const LABELS = { idle: '就绪', decoding: '解码中', refreshing: '刷屏中', error: '出错' };
+
+function showStatus(s) {
+  const st = s.state || 'error';
+  $('dot').className = 'dot ' + (DOTS[st] || '');
+  $('state').textContent = LABELS[st] || st;
+  const bits = [];
+  if (s.msg) bits.push(s.msg);
+  if (s.src_w) bits.push(`源图 ${s.src_w}×${s.src_h}`);
+  bits.push(`${s.wifi ? '热点开' : '热点关'} ${s.ssid || '?'}`);
+  bits.push(`剩余内存 ${Math.round((s.heap || 0) / 1024)} KB`);
+  $('detail').textContent = bits.join(' · ');
+  return st;
+}
+
+async function pollStatus() {
+  try {
+    const r = await fetch('/status', { cache: 'no-store' });
+    return showStatus(await r.json());
+  } catch (e) {
+    $('dot').className = 'dot err';
+    $('state').textContent = '连接断开';
+    return 'error';
+  }
+}
+
+/* ---------- 上传 ---------- */
+async function upload() {
+  if (!bitmap || busy) return;
+  busy = true;
+  $('send').disabled = true;
+  $('state').textContent = '压缩中…';
+
+  const blob = await encodeUnderLimit();
+  if (!blob) {
+    $('state').textContent = '图片压缩失败，换一张试试';
+    $('dot').className = 'dot err';
+    busy = false; $('send').disabled = false;
+    return;
+  }
+  $('size').textContent = `上传尺寸 ${blob.size / 1024 | 0} KB`;
+  $('state').textContent = '上传中…';
+
+  try {
+    const r = await fetch('/upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'image/jpeg' },
+      body: blob
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.msg || ('HTTP ' + r.status));
+  } catch (e) {
+    $('state').textContent = '上传失败：' + e.message;
+    $('dot').className = 'dot err';
+    busy = false; $('send').disabled = false;
+    return;
+  }
+
+  // 轮询直到刷完
+  const t0 = Date.now();
+  let sawBusy = false;
+  await new Promise(done => {
+    const t = setInterval(async () => {
+      const st = await pollStatus();
+      if (st === 'decoding' || st === 'refreshing') sawBusy = true;
+      const finished = sawBusy && (st === 'idle' || st === 'error');
+      if (finished || Date.now() - t0 > 45000) {
+        clearInterval(t);
+        done();
+      }
+    }, 1200);
+  });
+
+  busy = false;
+  $('send').disabled = false;
+}
+
+/* ---------- 事件 ---------- */
+$('file').addEventListener('change', async e => {
+  const f = e.target.files && e.target.files[0];
+  if (!f) return;
+  try {
+    try {
+      bitmap = await createImageBitmap(f, { imageOrientation: 'from-image' });
+    } catch (_) {
+      bitmap = await createImageBitmap(f);
+    }
+  } catch (err) {
+    $('state').textContent = '无法读取这张图片';
+    return;
+  }
+  renderPreview();
+  $('size').textContent = `${f.name} · ${bitmap.width}×${bitmap.height}`;
+  $('send').disabled = false;
+});
+
+$('send').addEventListener('click', upload);
+
+$('save').addEventListener('click', async () => {
+  const body = new URLSearchParams({ ssid: $('ssid').value.trim(), password: $('pass').value });
+  try {
+    const r = await fetch('/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body
+    });
+    const j = await r.json();
+    $('cfgmsg').textContent = j.msg || (j.ok ? '已保存' : '保存失败');
+  } catch (e) {
+    $('cfgmsg').textContent = '保存失败：' + e.message;
+  }
+});
+
+$('reboot').addEventListener('click', async () => {
+  if (!confirm('确定重启设备？')) return;
+  await fetch('/reboot', { method: 'POST' }).catch(() => {});
+  $('cfgmsg').textContent = '设备正在重启，稍等约 5 秒后刷新本页';
+});
+
+/* ---------- 初始化 ---------- */
+(async () => {
+  const s = await fetch('/status', { cache: 'no-store' }).then(r => r.json()).catch(() => null);
+  if (s) {
+    showStatus(s);
+    $('ssid').value = s.ssid || '';
+  }
+  setInterval(() => { if (!busy) pollStatus(); }, 5000);
+})();
+</script>
+</body>
+</html>

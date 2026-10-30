@@ -21,7 +21,19 @@ import serial
 
 
 def open_port(port: str, baud: int) -> serial.Serial:
-    return serial.Serial(port, baud, timeout=0.5)
+    # pyserial 打开端口时会按 _rts_state/_dtr_state 拉线，默认都是高。
+    # ESP32-C3 的原生 USB Serial/JTAG 把 RTS 接 EN、DTR 接 GPIO9：打开端口
+    # 就等于给芯片一次复位（表现为串口静默、Wi-Fi 热点消失）。
+    # 先构造对象、把两条线置为低，再 open()，避免采集动作本身复位板子；
+    # 需要复位时由 --reset 显式调用 pulse_reset()。
+    ser = serial.Serial()
+    ser.port = port
+    ser.baudrate = baud
+    ser.timeout = 0.5
+    ser.rts = False
+    ser.dtr = False
+    ser.open()
+    return ser
 
 
 def pulse_reset(ser: serial.Serial) -> None:

@@ -26,3 +26,9 @@ secrets/
 
 # 主机测试构建产物
 tests/host/build*/
+
+# 本机配置（含热点凭据），不入库
+tools/epd_photo/main/app_config_local.h
+
+# 组件管理器下载的依赖，由 main/idf_component.yml 还原
+managed_components/

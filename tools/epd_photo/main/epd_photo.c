@@ -1,0 +1,54 @@
+/*
+ * 墨水屏相框：开机开热点，手机连上后打开 http://192.168.4.1 上传照片。
+ * BOOT 键（GPIO9，引脚见 docs/pinmap.md）短按 = 打开/关闭热点；
+ * 热点打开时，屏幕上显示热点名称和密码。
+ *
+ * 任务划分：
+ *   main      —— 初始化、画开机页
+ *   display   —— 独占面板与 SPI：重刷/解码刷屏/切换热点都串行走这里（app_jobs.c）
+ *   httpd     —— 收图、配置
+ *   button    —— BOOT 键短按检测
+ *
+ * 串口控制台是 USB Serial/JTAG（COM4）。
+ */
+
+#include "app_config.h"
+#include "app_jobs.h"
+#include "button.h"
+#include "esp_err.h"
+#include "esp_log.h"
+#include "esp_system.h"
+#include "epd_se0398nz07.h"
+#include "screen_ui.h"
+#include "web_server.h"
+#include "wifi_ap.h"
+
+static const char *TAG = "epd_photo";
+
+static void on_button_press(void)
+{
+    ESP_LOGI(TAG, "BOOT 键：切换热点");
+    app_jobs_submit_toggle_wifi();
+}
+
+void app_main(void)
+{
+    ESP_LOGI(TAG, "启动，剩余堆 %u B", (unsigned)esp_get_free_heap_size());
+
+    ESP_ERROR_CHECK(app_config_init());
+    const app_config_t *cfg = app_config_get();
+
+    ESP_ERROR_CHECK(epd_init());
+
+    /* 先起热点：拿到地址后画状态页（此时显示任务还没创建，不存在并发） */
+    ESP_ERROR_CHECK(wifi_ap_start(cfg->ap_ssid, cfg->ap_password));
+    ESP_ERROR_CHECK(app_jobs_init());
+
+    screen_draw_wifi_status(cfg, true);
+    ESP_ERROR_CHECK(app_jobs_submit_refresh());
+
+    ESP_ERROR_CHECK(web_server_start());
+    ESP_ERROR_CHECK(button_init(on_button_press));
+
+    ESP_LOGI(TAG, "就绪，剩余堆 %u B", (unsigned)esp_get_free_heap_size());
+}
