@@ -15,16 +15,11 @@ import pathlib
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
+import epd_preview  # 同一份 PALETTE，避免第四份色板副本
+
 W, H = 768, 552
 ROW_BYTES = W // 4
-
-# 与 image_pipeline.c 的 k_pal_srgb、网页 PAL 保持同一套实测近似值
-PALETTE = np.array([
-    [33, 32, 34],      # 0 黑
-    [204, 204, 198],   # 1 白
-    [217, 133, 9],     # 2 黄
-    [109, 31, 22],     # 3 红
-], dtype=np.uint8)
+PALETTE = epd_preview.PALETTE.astype(np.uint8)
 
 BLACK, WHITE, YELLOW, RED = 0, 1, 2, 3
 

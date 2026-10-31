@@ -36,10 +36,10 @@ W, H = 768, 552
 # 数值来自实拍照采样（docs/calibration.md）：以纸白为参考归一化。
 # 必须与固件 image_pipeline.c 的 k_pal_srgb、网页 index.html 的 PAL 一致。
 PALETTE = np.array([
-    [33, 32, 34],     # EPD_BLACK  (0)
+    [54, 53, 58],     # EPD_BLACK  (0)
     [204, 204, 198],  # EPD_WHITE  (1)
-    [217, 133, 9],    # EPD_YELLOW (2) —— 这块屏的黄偏橙
-    [109, 31, 22],    # EPD_RED    (3)
+    [216, 154, 93],   # EPD_YELLOW (2) —— 这块屏的黄偏土黄
+    [121, 67, 79],    # EPD_RED    (3) —— 偏玫红
 ], dtype=np.float64)
 
 BAYER4 = np.array([

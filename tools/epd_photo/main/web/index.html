@@ -160,7 +160,7 @@ const ROW_BYTES = W / 4;             // 192
 const FB_BYTES = ROW_BYTES * H;      // 105984
 
 /* 面板四色（sRGB 近似）：必须和固件 image_pipeline.c / docs/calibration.md 一致 */
-const PAL = [[33,32,34],[204,204,198],[217,133,9],[109,31,22]];
+const PAL = [[54,53,58],[204,204,198],[216,154,93],[121,67,79]];
 
 
 const $ = id => document.getElementById(id);
@@ -270,7 +270,7 @@ function renderFinal() {
   const g = Math.max(1, Math.min(3, Math.round(q.grain)));
   const gw = W / g, gh = H / g;          /* 768、552 都能被 1/2/3 整除 */
   const N = gw * gh;
-  const L = new Float32Array(N), A = new Float32Array(N), B = new Float32Array(N);
+  const L = new Float64Array(N), A = new Float64Array(N), B = new Float64Array(N);
   const pal = OK.pal, edges = OK.edges;
   const lab = [0, 0, 0];
 
@@ -317,7 +317,7 @@ function renderFinal() {
   } else {
     /* 先在线性光里按块取平均，再转 Oklab —— 块平均必须在调色之后，
      * 否则会把暗部压过头。 */
-    const aR = new Float32Array(N), aG = new Float32Array(N), aB = new Float32Array(N);
+    const aR = new Float64Array(N), aG = new Float64Array(N), aB = new Float64Array(N);
     for (let y = 0; y < H; y++) {
       const src = y * W * 4, dst = ((y / g) | 0) * gw;
       for (let x = 0; x < W; x++) {
@@ -345,8 +345,8 @@ function renderFinal() {
   /* 误差扩散：cur = 本行要加的误差，nxt = 下一行；每行换方向减少条纹 */
   const CLAMP_ERR = 0.25;
   const codes = new Uint8Array(N);
-  let curL = new Float32Array(gw), curA = new Float32Array(gw), curB = new Float32Array(gw);
-  let nxtL = new Float32Array(gw), nxtA = new Float32Array(gw), nxtB = new Float32Array(gw);
+  let curL = new Float64Array(gw), curA = new Float64Array(gw), curB = new Float64Array(gw);
+  let nxtL = new Float64Array(gw), nxtA = new Float64Array(gw), nxtB = new Float64Array(gw);
 
   for (let y = 0; y < gh; y++) {
     const step = (y & 1) ? -1 : 1;
