@@ -1,0 +1,2 @@
+I (180) esp_image: segment 3: paddr=000ea1b0 vaddr=3fc97034 sizeI (15993) epd: refresh pass 1/1 done in 15014 ms
+I (16063) jobs: 刷屏完成，剩余堆 93840 B
