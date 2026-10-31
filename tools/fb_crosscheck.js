@@ -95,6 +95,8 @@ vm.runInContext(`
   document.getElementById('qgamma').value = 1.10;
   document.getElementById('qcon').value = 1.05;
   document.getElementById('qsat').value = 1.25;
+  document.getElementById('qtemp').value = 0;
+  document.getElementById('qhue').value = 0;
   bitmap = { width: 768, height: 552 };
 `, sandbox);
 

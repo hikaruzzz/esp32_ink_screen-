@@ -254,19 +254,42 @@ def algo_fs_ok(srgb: np.ndarray, strength: float = 1.0,
     return idx
 
 
-def ok_gamut_map(srgb: np.ndarray) -> np.ndarray:
+def ok_adjust(lab: np.ndarray, hue_deg: float = 0.0,
+              temp: float = 0.0) -> np.ndarray:
+    """色相 = 在 Oklab 色度平面上旋转；色温 = 沿 b 轴平移（正=黄暖，负=蓝冷）。
+
+    与网页的 quality() → renderFinal() 完全对应；temp 的 1.0 对应 b +0.06。
+    """
+    if hue_deg == 0 and temp == 0:
+        return lab
+    r = np.deg2rad(hue_deg)
+    c, s = np.cos(r), np.sin(r)
+    a, b = lab[..., 1], lab[..., 2]
+    out = lab.copy()
+    out[..., 1] = a * c - b * s
+    out[..., 2] = a * s + b * c + temp * 0.06
+    return out
+
+
+def ok_gamut_map(srgb: np.ndarray, hue: float = 0.0,
+                 temp: float = 0.0) -> np.ndarray:
     """在 Oklab 里把每个像素投影到四色凸包最合适的一条边上。
 
     凸包外的颜色（蓝、绿、青）会被压到最近的可表示颜色 —— 丢掉的是
     根本印不出来的色度，亮度关系保留，所以蓝天不会变成一片白。
     """
-    return ok_gamut_map_lin(srgb_to_lin(srgb))
+    return ok_gamut_map_lin(srgb_to_lin(srgb), hue, temp)
 
 
-def ok_gamut_map_lin(lin: np.ndarray) -> np.ndarray:
+def ok_gamut_map_lin(lin: np.ndarray, hue: float = 0.0,
+                     temp: float = 0.0) -> np.ndarray:
     """同 ok_gamut_map，但输入直接是线性 RGB（0..1）。"""
+    return ok_gamut_map_lab(ok_adjust(lin_to_oklab(lin), hue, temp))
+
+
+def ok_gamut_map_lab(lab: np.ndarray) -> np.ndarray:
+    """同 ok_gamut_map，但输入已经是 Oklab 坐标。"""
     pal = lin_to_oklab(srgb_to_lin(PALETTE / 255.0))
-    lab = lin_to_oklab(lin)
 
     best_err = np.full(lab.shape[:2], np.inf)
     best = lab.copy()
@@ -286,20 +309,24 @@ def ok_gamut_map_lin(lin: np.ndarray) -> np.ndarray:
 
 
 def algo_fs_gm(srgb: np.ndarray, strength: float = 1.0,
-               clamp_err: float = 0.25, jitter: float = 0.0) -> np.ndarray:
+               clamp_err: float = 0.25, jitter: float = 0.0,
+               hue: float = 0.0, temp: float = 0.0) -> np.ndarray:
     """先色域映射到凸包，再做误差扩散 —— 抖动只负责混色，不再背着
     印不出来的颜色漂移。手机端用的是同一个算法。
 
     jitter：给误差加一点确定性的小扰动，打散平坦区域的横向条纹。
+    hue/temp：色相（度）/ 色温（-1..1），在色域映射之前调整。
     """
-    return algo_fs_gm_lin(srgb_to_lin(srgb), strength, clamp_err, jitter)
+    return algo_fs_gm_lin(srgb_to_lin(srgb), strength, clamp_err, jitter,
+                          hue, temp)
 
 
 def algo_fs_gm_lin(lin: np.ndarray, strength: float = 1.0,
-                   clamp_err: float = 0.25, jitter: float = 0.0) -> np.ndarray:
+                   clamp_err: float = 0.25, jitter: float = 0.0,
+                   hue: float = 0.0, temp: float = 0.0) -> np.ndarray:
     """同 algo_fs_gm，但输入直接是线性 RGB（0..1）。"""
     pal = lin_to_oklab(srgb_to_lin(PALETTE / 255.0))
-    buf = ok_gamut_map_lin(lin)
+    buf = ok_gamut_map_lin(lin, hue, temp)
     h, w, _ = buf.shape
     idx = np.zeros((h, w), dtype=np.uint8)
     rng = np.random.default_rng(20261031)
@@ -371,6 +398,10 @@ def main() -> int:
     ap.add_argument("--gamma", type=float, default=1.10)
     ap.add_argument("--contrast", type=float, default=1.05)
     ap.add_argument("--sat", type=float, default=1.25)
+    ap.add_argument("--temp", type=float, default=0.0,
+                    help="色温 -1..1（正=偏暖黄，负=偏冷蓝），仅 fsgm")
+    ap.add_argument("--hue", type=float, default=0.0,
+                    help="色相旋转角度（度），仅 fsgm")
     ap.add_argument("--scale", type=int, default=2)
     ap.add_argument("--grid-bug", action="store_true",
                     help="复现旧固件的 MCU 边界白格栅")
@@ -390,7 +421,8 @@ def main() -> int:
         idx = algo_fs_ok(toned, args.fs_strength)
     elif args.algo == "fsgm":
         toned = tone_map(rgb, args.exposure, args.gamma, args.contrast, args.sat)
-        idx = algo_fs_gm(toned, args.fs_strength, jitter=args.fs_jitter)
+        idx = algo_fs_gm(toned, args.fs_strength, jitter=args.fs_jitter,
+                         hue=args.hue, temp=args.temp)
     else:
         toned = tone_map(rgb, args.exposure, args.gamma, args.contrast, args.sat)
         lin = srgb_to_lin(toned)

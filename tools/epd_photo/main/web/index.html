@@ -118,7 +118,10 @@
   <div class="qrow"><span>明暗</span><input id="qgamma" type="range" min="0.7" max="1.8" step="0.02" value="1.10"><b id="vgamma">1.10</b></div>
   <div class="qrow"><span>对比度</span><input id="qcon" type="range" min="0.7" max="1.4" step="0.02" value="1.05"><b id="vcon">1.05</b></div>
   <div class="qrow"><span>饱和度</span><input id="qsat" type="range" min="0" max="1.8" step="0.05" value="1.25"><b id="vsat">1.25</b></div>
-  <div class="meta">预览实时更新；参数随图片一起下发给设备，不用重启。</div>
+  <div class="qrow"><span>色温</span><input id="qtemp" type="range" min="-1" max="1" step="0.05" value="0"><b id="vtemp">0.00</b></div>
+  <div class="qrow"><span>色相</span><input id="qhue" type="range" min="-60" max="60" step="5" value="0"><b id="vhue">0°</b></div>
+  <div class="meta">预览实时更新。色温往右偏暖（黄），往左偏冷（蓝）；色相整体转色偏，
+    例如画面发绿就往红的方向转。参数全部在手机上算进最终四色帧，设备不用重启。</div>
 </div>
 
 <div class="card">
@@ -208,6 +211,8 @@ function quality() {
     gamma: +$('qgamma').value,
     con: +$('qcon').value,
     sat: +$('qsat').value,
+    temp: +$('qtemp').value,
+    hue: +$('qhue').value,
   };
 }
 
@@ -260,6 +265,14 @@ function renderFinal() {
   const pal = OK.pal, edges = OK.edges;
   const lab = [0, 0, 0];
 
+  /* 色温 / 色相只在 Oklab 的色度平面上动：
+   *   色相 = 旋转 (a,b)，亮度 L 不变；
+   *   色温 = 沿 b 轴平移（b 正向偏黄暖，负向偏蓝冷）。 */
+  const hueRad = q.hue * Math.PI / 180;
+  const cosH = Math.cos(hueRad), sinH = Math.sin(hueRad);
+  const dTemp = q.temp * 0.06;
+  const adjust = (q.hue !== 0 || q.temp !== 0);
+
   for (let i = 0; i < N; i++) {
     const k = i * 4;
     const r = d[k], g = d[k + 1], b = d[k + 2];
@@ -268,6 +281,11 @@ function renderFinal() {
     const gi = clamp(Math.round(luma + (g - luma) * q.sat));
     const bi = clamp(Math.round(luma + (b - luma) * q.sat));
     linToOklab(tl[ri], tl[gi], tl[bi], lab);
+    if (adjust) {
+      const a0 = lab[1], b0 = lab[2];
+      lab[1] = a0 * cosH - b0 * sinH;
+      lab[2] = a0 * sinH + b0 * cosH + dTemp;
+    }
 
     let bestErr = Infinity, bl = 0, ba = 0, bb = 0;
     for (let e = 0; e < 6; e++) {
@@ -455,13 +473,21 @@ $('file').addEventListener('change', async e => {
 $('send').addEventListener('click', upload);
 
 /* ---------- 画质滑块 ---------- */
-const QSLIDERS = [['qexpo', 'vexpo', 2], ['qgamma', 'vgamma', 2],
-                  ['qcon', 'vcon', 2], ['qsat', 'vsat', 2]];
-const QDEFAULT = { qexpo: 1.35, qgamma: 1.10, qcon: 1.05, qsat: 1.25 };
+const QSLIDERS = [
+  ['qexpo', 'vexpo', v => v.toFixed(2)],
+  ['qgamma', 'vgamma', v => v.toFixed(2)],
+  ['qcon', 'vcon', v => v.toFixed(2)],
+  ['qsat', 'vsat', v => v.toFixed(2)],
+  ['qtemp', 'vtemp', v => v.toFixed(2)],
+  ['qhue', 'vhue', v => `${v.toFixed(0)}°`],
+];
+const QDEFAULT = {
+  qexpo: 1.35, qgamma: 1.10, qcon: 1.05, qsat: 1.25, qtemp: 0, qhue: 0,
+};
 
 function syncQLabels() {
-  for (const [id, out, digits] of QSLIDERS) {
-    $(out).textContent = (+$(id).value).toFixed(digits);
+  for (const [id, out, fmt] of QSLIDERS) {
+    $(out).textContent = fmt(+$(id).value);
   }
 }
 
@@ -483,7 +509,10 @@ $('qreset').addEventListener('click', () => {
 /* 上次调好的参数存在浏览器里，刷新页面不用重调 */
 try {
   const saved = JSON.parse(localStorage.getItem('epdQuality') || '{}');
-  const map = { qexpo: 'expo', qgamma: 'gamma', qcon: 'con', qsat: 'sat' };
+  const map = {
+    qexpo: 'expo', qgamma: 'gamma', qcon: 'con', qsat: 'sat',
+    qtemp: 'temp', qhue: 'hue',
+  };
   for (const [id, key] of Object.entries(map)) {
     if (typeof saved[key] === 'number') $(id).value = saved[key];
   }
