@@ -55,13 +55,15 @@ def js_style_linear(src: np.ndarray, expo: float, gamma: float,
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("image")
+    ap.add_argument("--grain", type=int, default=1,
+                    help="抖动颗粒 n×n，检查网页的分块路径时用 2 或 3")
     args = ap.parse_args()
 
     rgb = ep.cover_crop(Image.open(args.image))          # 0..1 sRGB, 768x552
     src = (np.clip(rgb, 0, 1) * 255).round().astype(np.uint8)
 
     lin = js_style_linear(src, 1.35, 1.10, 1.05, 1.25)
-    idx_py = ep.algo_fs_gm_lin(lin, 1.0)
+    idx_py = ep.algo_fs_gm_lin(lin, 1.0, grain=args.grain)
     fb_py = pack_fb(idx_py)
 
     with tempfile.TemporaryDirectory() as td:
@@ -70,7 +72,7 @@ def main() -> int:
         src.tofile(src_path)
         proc = subprocess.run(
             ["node", str(pathlib.Path(__file__).parent / "fb_crosscheck.js"),
-             str(src_path), str(out_path)],
+             str(src_path), str(out_path), str(args.grain)],
             capture_output=True, text=True)
         if proc.returncode != 0:
             print(proc.stdout, proc.stderr)

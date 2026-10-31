@@ -1,7 +1,8 @@
 /*
- * 墨水屏相框：开机开热点，手机连上后打开 http://192.168.4.1 上传照片。
+ * 墨水屏相框：上电默认热点关闭，屏幕直接显示上次的照片（像画框一样）。
  * BOOT 键（GPIO9，引脚见 docs/pinmap.md）短按 = 打开/关闭热点；
- * 热点打开时，屏幕上显示热点名称和密码。
+ * 热点打开时手机连上后打开 http://192.168.4.1 上传照片。
+ * 还没有照片时，上电显示一张“按 BOOT 打开热点”的提示页。
  *
  * 任务划分：
  *   main      —— 初始化、画开机页
@@ -44,12 +45,20 @@ void app_main(void)
     /* 照片分区缺失只影响“关热点后还原照片”，不该阻止启动 */
     photo_store_init();
 
-    /* 先起热点：拿到地址后画状态页（此时显示任务还没创建，不存在并发） */
-    ESP_ERROR_CHECK(wifi_ap_start(cfg->ap_ssid, cfg->ap_password));
+    /* 热点只配置不启动：上电默认关着，按 BOOT 才开（此时显示任务还没创建，
+     * 不存在并发）。网页服务照常启动，热点一开就能访问。 */
+    ESP_ERROR_CHECK(wifi_ap_init(cfg->ap_ssid, cfg->ap_password));
     ESP_ERROR_CHECK(app_jobs_init());
 
-    screen_draw_wifi_status(cfg, true);
-    ESP_ERROR_CHECK(app_jobs_submit_refresh());
+    size_t photo_len = 0;
+    if (photo_store_info(&photo_len, NULL, NULL, NULL) == ESP_OK) {
+        ESP_LOGI(TAG, "上电显示分区里的照片（%u B）", (unsigned)photo_len);
+        ESP_ERROR_CHECK(app_jobs_submit_decode());
+    } else {
+        /* 还没有照片：画一张“按 BOOT 打开热点”的提示页 */
+        screen_draw_wifi_status(cfg, false);
+        ESP_ERROR_CHECK(app_jobs_submit_refresh());
+    }
 
     ESP_ERROR_CHECK(web_server_start());
     ESP_ERROR_CHECK(button_init(on_button_press));

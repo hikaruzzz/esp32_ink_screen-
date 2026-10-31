@@ -310,7 +310,8 @@ def ok_gamut_map_lab(lab: np.ndarray) -> np.ndarray:
 
 def algo_fs_gm(srgb: np.ndarray, strength: float = 1.0,
                clamp_err: float = 0.25, jitter: float = 0.0,
-               hue: float = 0.0, temp: float = 0.0) -> np.ndarray:
+               hue: float = 0.0, temp: float = 0.0,
+               grain: int = 1) -> np.ndarray:
     """先色域映射到凸包，再做误差扩散 —— 抖动只负责混色，不再背着
     印不出来的颜色漂移。手机端用的是同一个算法。
 
@@ -318,14 +319,42 @@ def algo_fs_gm(srgb: np.ndarray, strength: float = 1.0,
     hue/temp：色相（度）/ 色温（-1..1），在色域映射之前调整。
     """
     return algo_fs_gm_lin(srgb_to_lin(srgb), strength, clamp_err, jitter,
-                          hue, temp)
+                          hue, temp, grain)
+
+
+def block_average(lin: np.ndarray, n: int) -> np.ndarray:
+    """按 n×n 块取平均（线性 RGB）。颗粒越大，抖动出来的点越成团，
+    单像素白噪点越少；代价是细节变粗。"""
+    if n <= 1:
+        return lin
+    h, w, _ = lin.shape
+    bh, bw = h // n, w // n
+    core = lin[:bh * n, :bw * n]
+    return core.reshape(bh, n, bw, n, 3).mean(axis=(1, 3))
+
+
+def block_expand(idx: np.ndarray, n: int, h: int, w: int) -> np.ndarray:
+    """把 n×n 块索引放大回整屏；尺寸不整除时右下补白。"""
+    if n <= 1:
+        return idx
+    out = np.repeat(np.repeat(idx, n, axis=0), n, axis=1)
+    if out.shape[0] != h or out.shape[1] != w:
+        pad = np.ones((h, w), dtype=np.uint8)
+        pad[:out.shape[0], :out.shape[1]] = out[:h, :w]
+        out = pad
+    return out
 
 
 def algo_fs_gm_lin(lin: np.ndarray, strength: float = 1.0,
                    clamp_err: float = 0.25, jitter: float = 0.0,
-                   hue: float = 0.0, temp: float = 0.0) -> np.ndarray:
+                   hue: float = 0.0, temp: float = 0.0,
+                   grain: int = 1) -> np.ndarray:
+    """同 algo_fs_gm，但输入直接是线性 RGB（0..1）。"""
     """同 algo_fs_gm，但输入直接是线性 RGB（0..1）。"""
     pal = lin_to_oklab(srgb_to_lin(PALETTE / 255.0))
+    full_h, full_w, _ = lin.shape
+    if grain > 1:
+        lin = block_average(lin, grain)
     buf = ok_gamut_map_lin(lin, hue, temp)
     h, w, _ = buf.shape
     idx = np.zeros((h, w), dtype=np.uint8)
@@ -349,7 +378,7 @@ def algo_fs_gm_lin(lin: np.ndarray, strength: float = 1.0,
                 buf[y + 1, x] += err * (5 / 16)
                 if 0 <= x + step < w:
                     buf[y + 1, x + step] += err * (1 / 16)
-    return idx
+    return block_expand(idx, grain, full_h, full_w)
 
 
 def algo_bayer4(rgb: np.ndarray, mask: np.ndarray) -> np.ndarray:
@@ -402,6 +431,9 @@ def main() -> int:
                     help="色温 -1..1（正=偏暖黄，负=偏冷蓝），仅 fsgm")
     ap.add_argument("--hue", type=float, default=0.0,
                     help="色相旋转角度（度），仅 fsgm")
+    ap.add_argument("--grain", type=int, default=1,
+                    help="抖动颗粒 n×n，1=单像素（最细，噪点最多），"
+                         "2=成团，3=更粗；仅 fsgm")
     ap.add_argument("--scale", type=int, default=2)
     ap.add_argument("--grid-bug", action="store_true",
                     help="复现旧固件的 MCU 边界白格栅")
@@ -422,7 +454,7 @@ def main() -> int:
     elif args.algo == "fsgm":
         toned = tone_map(rgb, args.exposure, args.gamma, args.contrast, args.sat)
         idx = algo_fs_gm(toned, args.fs_strength, jitter=args.fs_jitter,
-                         hue=args.hue, temp=args.temp)
+                         hue=args.hue, temp=args.temp, grain=args.grain)
     else:
         toned = tone_map(rgb, args.exposure, args.gamma, args.contrast, args.sat)
         lin = srgb_to_lin(toned)

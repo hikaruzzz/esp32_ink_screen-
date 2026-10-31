@@ -10,7 +10,11 @@
 static const char *TAG = "wifi_ap";
 static bool s_ap_on;
 
-esp_err_t wifi_ap_start(const char *ssid, const char *password)
+/*
+ * 只做初始化和配置，不启动射频 —— 上电默认是关的，按 BOOT 才开。
+ * 这样开机可以直接把屏幕让给照片，也省掉常驻的 Wi-Fi 功耗。
+ */
+esp_err_t wifi_ap_init(const char *ssid, const char *password)
 {
     if (ssid == NULL || ssid[0] == '\0') {
         return ESP_ERR_INVALID_ARG;
@@ -54,19 +58,15 @@ esp_err_t wifi_ap_start(const char *ssid, const char *password)
     if (err == ESP_OK) {
         err = esp_wifi_set_config(WIFI_IF_AP, &ap_cfg);
     }
-    if (err == ESP_OK) {
-        err = esp_wifi_start();
-    }
     if (err != ESP_OK) {
         return err;
     }
 
-    s_ap_on = true;
-
-    esp_netif_ip_info_t ip = {0};
-    esp_netif_get_ip_info(ap_netif, &ip);
-    ESP_LOGI(TAG, "热点已启动 SSID=\"%s\" 加密方式=%s 地址=http://" IPSTR,
-             ssid, use_wpa2 ? "WPA2" : "开放", IP2STR(&ip.ip));
+    /* 配置留在驱动里，射频保持关闭；wifi_ap_set_enabled(true) 时才
+     * esp_wifi_start()，热点名和密码不用重设。 */
+    s_ap_on = false;
+    ESP_LOGI(TAG, "热点已配置但未启动：SSID=\"%s\" 加密方式=%s（按 BOOT 打开）",
+             ssid, use_wpa2 ? "WPA2" : "开放");
     return ESP_OK;
 }
 

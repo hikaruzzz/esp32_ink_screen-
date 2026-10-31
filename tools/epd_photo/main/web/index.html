@@ -120,8 +120,11 @@
   <div class="qrow"><span>饱和度</span><input id="qsat" type="range" min="0" max="1.8" step="0.05" value="1.25"><b id="vsat">1.25</b></div>
   <div class="qrow"><span>色温</span><input id="qtemp" type="range" min="-1" max="1" step="0.05" value="0"><b id="vtemp">0.00</b></div>
   <div class="qrow"><span>色相</span><input id="qhue" type="range" min="-60" max="60" step="5" value="0"><b id="vhue">0°</b></div>
+  <div class="qrow"><span>颗粒</span><input id="qgrain" type="range" min="1" max="3" step="1" value="2"><b id="vgrain">2×</b></div>
   <div class="meta">预览实时更新。色温往右偏暖（黄），往左偏冷（蓝）；色相整体转色偏，
-    例如画面发绿就往红的方向转。参数全部在手机上算进最终四色帧，设备不用重启。</div>
+    例如画面发绿就往红的方向转。颗粒 = 抖动色点的大小：1× 最细但浅色区会出现
+    单像素白噪点，2× 连成小块更干净，3× 最干净但细节最糊。
+    参数全部在手机上算进最终四色帧，设备不用重启。</div>
 </div>
 
 <div class="card">
@@ -213,6 +216,7 @@ function quality() {
     sat: +$('qsat').value,
     temp: +$('qtemp').value,
     hue: +$('qhue').value,
+    grain: +$('qgrain').value,
   };
 }
 
@@ -260,7 +264,12 @@ function renderFinal() {
   const tl = new Float32Array(256);
   for (let i = 0; i < 256; i++) tl[i] = srgbToLin(tone[i] / 255);
 
-  const N = W * H;
+  /* 颗粒：g×g 个像素抖动成同一个色点。四色屏上浅色区只能靠白/黄/红的小点
+   * 混出来，g=1 时这些点是单像素的，看久了就是一片白噪点；g=2 让点连成
+   * 2×2 的小块，远看更像印刷网点，代价是细节略糊。 */
+  const g = Math.max(1, Math.min(3, Math.round(q.grain)));
+  const gw = W / g, gh = H / g;          /* 768、552 都能被 1/2/3 整除 */
+  const N = gw * gh;
   const L = new Float32Array(N), A = new Float32Array(N), B = new Float32Array(N);
   const pal = OK.pal, edges = OK.edges;
   const lab = [0, 0, 0];
@@ -273,20 +282,8 @@ function renderFinal() {
   const dTemp = q.temp * 0.06;
   const adjust = (q.hue !== 0 || q.temp !== 0);
 
-  for (let i = 0; i < N; i++) {
-    const k = i * 4;
-    const r = d[k], g = d[k + 1], b = d[k + 2];
-    const luma = (299 * r + 587 * g + 114 * b + 500) / 1000 | 0;
-    const ri = clamp(Math.round(luma + (r - luma) * q.sat));
-    const gi = clamp(Math.round(luma + (g - luma) * q.sat));
-    const bi = clamp(Math.round(luma + (b - luma) * q.sat));
-    linToOklab(tl[ri], tl[gi], tl[bi], lab);
-    if (adjust) {
-      const a0 = lab[1], b0 = lab[2];
-      lab[1] = a0 * cosH - b0 * sinH;
-      lab[2] = a0 * sinH + b0 * cosH + dTemp;
-    }
-
+  /* 投影到四色凸包的最近点，结果写进 L/A/B[i] */
+  function gamutTo(i) {
     let bestErr = Infinity, bl = 0, ba = 0, bb = 0;
     for (let e = 0; e < 6; e++) {
       const ed = edges[e], p = ed.p, dv = ed.d;
@@ -301,16 +298,60 @@ function renderFinal() {
     L[i] = bl; A[i] = ba; B[i] = bb;
   }
 
+  if (g === 1) {
+    for (let i = 0; i < N; i++) {
+      const k = i * 4;
+      const r = d[k], gg = d[k + 1], b = d[k + 2];
+      const luma = (299 * r + 587 * gg + 114 * b + 500) / 1000 | 0;
+      const ri = clamp(Math.round(luma + (r - luma) * q.sat));
+      const gi = clamp(Math.round(luma + (gg - luma) * q.sat));
+      const bi = clamp(Math.round(luma + (b - luma) * q.sat));
+      linToOklab(tl[ri], tl[gi], tl[bi], lab);
+      if (adjust) {
+        const a0 = lab[1], b0 = lab[2];
+        lab[1] = a0 * cosH - b0 * sinH;
+        lab[2] = a0 * sinH + b0 * cosH + dTemp;
+      }
+      gamutTo(i);
+    }
+  } else {
+    /* 先在线性光里按块取平均，再转 Oklab —— 块平均必须在调色之后，
+     * 否则会把暗部压过头。 */
+    const aR = new Float32Array(N), aG = new Float32Array(N), aB = new Float32Array(N);
+    for (let y = 0; y < H; y++) {
+      const src = y * W * 4, dst = ((y / g) | 0) * gw;
+      for (let x = 0; x < W; x++) {
+        const k = src + x * 4;
+        const r = d[k], gg = d[k + 1], b = d[k + 2];
+        const luma = (299 * r + 587 * gg + 114 * b + 500) / 1000 | 0;
+        const j = dst + ((x / g) | 0);
+        aR[j] += tl[clamp(Math.round(luma + (r - luma) * q.sat))];
+        aG[j] += tl[clamp(Math.round(luma + (gg - luma) * q.sat))];
+        aB[j] += tl[clamp(Math.round(luma + (b - luma) * q.sat))];
+      }
+    }
+    const inv = 1 / (g * g);
+    for (let j = 0; j < N; j++) {
+      linToOklab(aR[j] * inv, aG[j] * inv, aB[j] * inv, lab);
+      if (adjust) {
+        const a0 = lab[1], b0 = lab[2];
+        lab[1] = a0 * cosH - b0 * sinH;
+        lab[2] = a0 * sinH + b0 * cosH + dTemp;
+      }
+      gamutTo(j);
+    }
+  }
+
   /* 误差扩散：cur = 本行要加的误差，nxt = 下一行；每行换方向减少条纹 */
   const CLAMP_ERR = 0.25;
-  const packed = new Uint8Array(FB_BYTES);
-  let curL = new Float32Array(W), curA = new Float32Array(W), curB = new Float32Array(W);
-  let nxtL = new Float32Array(W), nxtA = new Float32Array(W), nxtB = new Float32Array(W);
+  const codes = new Uint8Array(N);
+  let curL = new Float32Array(gw), curA = new Float32Array(gw), curB = new Float32Array(gw);
+  let nxtL = new Float32Array(gw), nxtA = new Float32Array(gw), nxtB = new Float32Array(gw);
 
-  for (let y = 0; y < H; y++) {
+  for (let y = 0; y < gh; y++) {
     const step = (y & 1) ? -1 : 1;
-    for (let n = 0, x = step > 0 ? 0 : W - 1; n < W; n++, x += step) {
-      const i = y * W + x;
+    for (let n = 0, x = step > 0 ? 0 : gw - 1; n < gw; n++, x += step) {
+      const i = y * gw + x;
       const l = L[i] + curL[x], a = A[i] + curA[x], b = B[i] + curB[x];
 
       let k = 0, best = Infinity;
@@ -319,7 +360,7 @@ function renderFinal() {
         const dd = dl * dl + da * da + db * db;
         if (dd < best) { best = dd; k = p; }
       }
-      packed[(y * W + x) >> 2] |= k << (6 - 2 * (x & 3));
+      codes[i] = k;
 
       let er = l - pal[k][0], ea = a - pal[k][1], eb = b - pal[k][2];
       er = er > CLAMP_ERR ? CLAMP_ERR : (er < -CLAMP_ERR ? -CLAMP_ERR : er);
@@ -327,15 +368,15 @@ function renderFinal() {
       eb = eb > CLAMP_ERR ? CLAMP_ERR : (eb < -CLAMP_ERR ? -CLAMP_ERR : eb);
 
       const xf = x + step, xl = x - step;
-      if (xf >= 0 && xf < W) {
+      if (xf >= 0 && xf < gw) {
         curL[xf] += er * 0.4375; curA[xf] += ea * 0.4375; curB[xf] += eb * 0.4375;
       }
-      if (y + 1 < H) {
-        if (xl >= 0 && xl < W) {
+      if (y + 1 < gh) {
+        if (xl >= 0 && xl < gw) {
           nxtL[xl] += er * 0.1875; nxtA[xl] += ea * 0.1875; nxtB[xl] += eb * 0.1875;
         }
         nxtL[x] += er * 0.3125; nxtA[x] += ea * 0.3125; nxtB[x] += eb * 0.3125;
-        if (xf >= 0 && xf < W) {
+        if (xf >= 0 && xf < gw) {
           nxtL[xf] += er * 0.0625; nxtA[xf] += ea * 0.0625; nxtB[xf] += eb * 0.0625;
         }
       }
@@ -345,6 +386,21 @@ function renderFinal() {
     t = curA; curA = nxtA; nxtA = t;
     t = curB; curB = nxtB; nxtB = t;
     nxtL.fill(0); nxtA.fill(0); nxtB.fill(0);
+  }
+
+  /* 把 g×g 的块放大成整屏 2bpp（每字节 4 像素，左侧像素在高位） */
+  const packed = new Uint8Array(FB_BYTES);
+  for (let by = 0; by < gh; by++) {
+    for (let bx = 0; bx < gw; bx++) {
+      const k = codes[by * gw + bx];
+      for (let dy = 0; dy < g; dy++) {
+        const row = (by * g + dy) * ROW_BYTES;
+        for (let dx = 0; dx < g; dx++) {
+          const x = bx * g + dx;
+          packed[row + (x >> 2)] |= k << (6 - 2 * (x & 3));
+        }
+      }
+    }
   }
 
   /* 预览直接由打包结果还原，保证看到的就是屏幕上的 */
@@ -480,9 +536,11 @@ const QSLIDERS = [
   ['qsat', 'vsat', v => v.toFixed(2)],
   ['qtemp', 'vtemp', v => v.toFixed(2)],
   ['qhue', 'vhue', v => `${v.toFixed(0)}°`],
+  ['qgrain', 'vgrain', v => `${v.toFixed(0)}×`],
 ];
 const QDEFAULT = {
   qexpo: 1.35, qgamma: 1.10, qcon: 1.05, qsat: 1.25, qtemp: 0, qhue: 0,
+  qgrain: 2,
 };
 
 function syncQLabels() {
@@ -511,7 +569,7 @@ try {
   const saved = JSON.parse(localStorage.getItem('epdQuality') || '{}');
   const map = {
     qexpo: 'expo', qgamma: 'gamma', qcon: 'con', qsat: 'sat',
-    qtemp: 'temp', qhue: 'hue',
+    qtemp: 'temp', qhue: 'hue', qgrain: 'grain',
   };
   for (const [id, key] of Object.entries(map)) {
     if (typeof saved[key] === 'number') $(id).value = saved[key];

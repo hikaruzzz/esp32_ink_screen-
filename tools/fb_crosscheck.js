@@ -11,11 +11,12 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const [srcPath, outPath] = process.argv.slice(2);
+const [srcPath, outPath, grainArg] = process.argv.slice(2);
 if (!srcPath || !outPath) {
-  console.error('用法: node fb_crosscheck.js <src.rgb> <out.2bpp>');
+  console.error('用法: node fb_crosscheck.js <src.rgb> <out.2bpp> [grain]');
   process.exit(2);
 }
+const grain = grainArg ? Number(grainArg) : 1;
 
 const W = 768, H = 552;
 const raw = fs.readFileSync(srcPath);
@@ -97,6 +98,7 @@ vm.runInContext(`
   document.getElementById('qsat').value = 1.25;
   document.getElementById('qtemp').value = 0;
   document.getElementById('qhue').value = 0;
+  document.getElementById('qgrain').value = ${grain};
   bitmap = { width: 768, height: 552 };
 `, sandbox);
 

@@ -201,3 +201,37 @@
   （注意：Node 桩里的滑块默认值要与页面一致，否则算出来差分很大）
 - 已编译并烧录：`epd_photo.bin` 0xee7d0；开机正常（`evidence/M2/hue_temp_boot.log`）
 - 待确认：实屏上哪个组合最接近原图；若普遍偏冷，可把默认 `qtemp` 设为 +0.2 左右
+
+## 上电默认关热点 + 抖动颗粒（2026-10-31 深夜）
+
+用户要求「上电后默认是 Wi-Fi 关闭」，并问「为什么画面感觉很多白噪点」。
+
+- 启动流程改动：
+  - `wifi_ap_start()` 改名 `wifi_ap_init()`：netif / 默认事件循环 / `esp_wifi_init`
+    / `esp_wifi_set_mode` / `esp_wifi_set_config` 全做，**不再调
+    `esp_wifi_start()`**，`s_ap_on = false`
+  - `app_main()`：初始化后先 `photo_store_info()` 探测分区；有照片就
+    `app_jobs_submit_decode()` 直接像画框一样显示，没有照片才画
+    「按 BOOT 打开热点」的提示页
+  - BOOT 短按仍走 `JOB_TOGGLE_WIFI`：开 → `esp_wifi_set_enabled(true)` 起射频
+    并画 SSID/密码页；再按 → 关射频并把照片解码回屏
+  - 实机（COM4，`evidence/M2/boot_wifioff.log`）：
+    `热点已配置但未启动：SSID="EPD-Photo" 加密方式=WPA2（按 BOOT 打开）`
+    → `上电显示分区里的照片（105984 B）` → 刷屏 15064 ms
+- 白噪点成因（结论：不是分辨率问题，是四色 2bpp 的物理限制）：
+  - 面板只有黑白黄红 4 种颜料，浅灰/米白只能用白+黄+红的小点混；
+    1×1 误差扩散下这些点是**单像素**的，密度又高（本图米白卡片约
+    61% 白 + 11% 黄 + 11% 红 + 16% 黑），远看发「沙」，近看就是一屏噪点
+  - 饱和度默认 1.25 会放大这一点：相机白平衡偏暖的卡片被推得更黄，黄点更多
+- 新增「颗粒」滑块 `qgrain` 1..3（默认 **2**）：
+  - 线性光下按 g×g 块取平均 → Oklab → 色域映射 → FS（块分辨率 384×276 /
+    256×184）→ 每个块复制成 g×g 像素再打包；768、552 都能被 1/2/3 整除
+  - 1× 最细（细节最好、噪点最多）；2× 连成小块更像印刷网点；3× 最干净最糊
+  - `epd_preview.py` 新增 `--grain`；`fb_crosscheck.py` 新增 `--grain`
+  - 一致性：grain=1/2/3 三档 **字节 100% 一致**（网页 JS vs numpy）
+  - 对照图：`evidence/M2/grain_{1,2,3}.png`、`evidence/M2/grain_cmp.png`
+- 不想改代码时的降噪手段：颗粒调大、饱和度调低（把暖白压回白）、
+  亮度调高（浅色区直接饱和成纯白，不参与抖动）
+- 已编译并烧录：`epd_photo.bin` 0xee850（余量 52%）
+- 待用户实测（主机不进热点）：BOOT 开/关热点、`/upload/raw` 上传、
+  颗粒默认 2 的实屏观感
