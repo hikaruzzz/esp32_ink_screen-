@@ -95,7 +95,7 @@
 <body>
 
 <h1>墨水屏相框</h1>
-<div class="sub">选择一张照片，设备会把它转成黑/白/黄/红四色显示。</div>
+<div class="sub">选择一张照片，浏览器直接算出黑/白/黄/红四色画面再发给设备，屏幕所见即所得。</div>
 
 <div class="card">
   <div id="ph" class="ph">还没有选择图片</div>
@@ -147,30 +147,15 @@
 </div>
 
 <script>
-const W = 768, H = 552, MAX_BYTES = 40 * 1024;
+/* 手机端直接生成面板帧缓冲：768x552、2bpp、每字节 4 像素（左侧像素在高位），
+ * 105,984 字节。布局与固件 epd_se0398nz07.h 的 EPD_FB_BYTES 完全一致。 */
+const W = 768, H = 552;
+const ROW_BYTES = W / 4;             // 192
+const FB_BYTES = ROW_BYTES * H;      // 105984
 
-/* 面板四色（sRGB 近似）与 16x16 蓝噪声阈值表：
- * 必须和固件 image_pipeline.c 里的 k_pal_srgb / s_bn 完全一致，
- * 否则这里看到的预览和实屏对不上。 */
-const PAL = [[32,32,32],[204,204,198],[222,190,74],[166,62,52]];
-const BN = new Uint8Array([
-  22,229, 58,134, 30,250, 61,122, 24,159,206,133, 32,198, 63,243,
-  87,171,101,  8,209,153,218,  1,179,223, 92,254,176,103,215,130,
-  18,202, 43,186, 74, 91, 49,141, 70,115, 46,148, 73, 13, 40,158,
-  79,142,249,124,166,239,192,102,232, 20,200,230,125,188,113,224,
-  33,109, 64,221, 26,118, 17,162, 35,140, 62,168, 28,246, 59,174,
- 241,210,154, 11,190, 83, 54,213, 86,189,108, 10, 97,208,129,  0,
-  88,183, 51, 98,138,248,173,126,  6,156, 42,222, 78,161, 48,147,
-  69,123,233,164, 67,204, 38,227, 72,237,196,136,181,236,104,197,
-  25,253,207, 37,  7,121, 94,150, 23,116, 90,255, 31, 65, 15,219,
- 139, 82,146,105,180,231,169,216,251,175, 53,127,214,152,120,172,
-   5,187, 52, 21, 85, 57, 44,132, 76,201,  2,163, 80,247, 41, 93,
- 225,114,240,193,157,245,199, 12,107,143, 56,228,106,184,203, 60,
-  36,167, 66,131, 29,117, 89,182, 34,244, 95,194, 27,137, 16,155,
- 128,211, 96,220,  4,144,226, 68,165,212, 50,149,252, 71,100,235,
-  77, 14, 47,177, 75,205, 39, 19,135,111,  9,178,119,217, 45,185,
- 110,195,151,242,112,170, 99,191,238, 81, 55,234, 84,160,  3,145,
-]);
+/* 面板四色（sRGB 近似）：必须和固件 image_pipeline.c / docs/calibration.md 一致 */
+const PAL = [[33,32,34],[204,204,198],[217,133,9],[109,31,22]];
+
 
 const $ = id => document.getElementById(id);
 const cv = $('cv'), ctx = cv.getContext('2d', { willReadFrequently: true });
@@ -187,18 +172,35 @@ const linToSrgb = v => {
 const LIN = new Float32Array(256);
 for (let i = 0; i < 256; i++) LIN[i] = srgbToLin(i / 255);
 
-/* 四色凸包的六条边：沿着边做两色混合，w 是 a 端的覆盖比例 */
-const EDGES = [];
-{
-  const lin = PAL.map(c => c.map(v => srgbToLin(v / 255)));
+/* ---------- Oklab：色域映射与误差扩散都在这个空间里算 ----------
+ * 线性 RGB 里蓝色亮度极低，直接投影会被判成很暗的灰；Oklab 把亮度
+ * 和色度分开，印不出来的蓝/绿只丢色度、保留明暗。 */
+function linToOklab(r, g, b, out) {
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+  out[0] = 0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s;
+  out[1] = 1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s;
+  out[2] = 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s;
+}
+
+/* 四色在 Oklab 里的坐标，以及凸包六条边（沿边混合 = 两种色料按比例叠加） */
+const OK = (() => {
+  const pal = PAL.map(c => {
+    const o = [0, 0, 0];
+    linToOklab(srgbToLin(c[0] / 255), srgbToLin(c[1] / 255), srgbToLin(c[2] / 255), o);
+    return o;
+  });
+  const edges = [];
   for (let i = 0; i < 4; i++) {
     for (let j = i + 1; j < 4; j++) {
-      const d = [lin[i][0] - lin[j][0], lin[i][1] - lin[j][1], lin[i][2] - lin[j][2]];
+      const d = [pal[i][0] - pal[j][0], pal[i][1] - pal[j][1], pal[i][2] - pal[j][2]];
       const den = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
-      EDGES.push({ a: i, b: j, pj: lin[j], d, inv: 1 / den });
+      edges.push({ p: pal[j], d, inv: 1 / den });
     }
   }
-}
+  return { pal, edges };
+})();
 
 function quality() {
   return {
@@ -227,80 +229,127 @@ function coverParams(iw, ih) {
   return { sx: (iw - sw) / 2, sy: (ih - sh) / 2, sw, sh };
 }
 
-/* ---------- 预览：cover 裁切 + 与固件相同的四色量化 ---------- */
-function renderPreview() {
-  if (!bitmap) return;
+/* ---------- 核心：生成最终 2bpp 帧（预览与上传是同一份数据） ----------
+ *   1. cover 裁切到 768x552
+ *   2. 饱和度 + 曝光/对比度/gamma（toneLUT）
+ *   3. 转到 Oklab，投影到四色凸包（丢弃印不出的色度）
+ *   4. Floyd–Steinberg 误差扩散，蛇形扫描
+ *   5. 打包成 2bpp（每字节 4 像素，左侧像素在高位）
+ * 返回耗时（秒）；结果放在 packedFrame 里。 */
+let packedFrame = null;
+
+function renderFinal() {
+  if (!bitmap) return 0;
+  const t0 = performance.now();
+
   const { sx, sy, sw, sh } = coverParams(bitmap.width, bitmap.height);
   ctx.fillStyle = '#fff';
   ctx.fillRect(0, 0, W, H);
   ctx.drawImage(bitmap, sx, sy, sw, sh, 0, 0, W, H);
 
-  const q = quality();
-  const tone = toneLUT(q);
   const img = ctx.getImageData(0, 0, W, H);
   const d = img.data;
 
-  for (let y = 0; y < H; y++) {
-    const bnRow = (y & 15) * 16;
-    for (let x = 0; x < W; x++) {
-      const i = (y * W + x) * 4;
-      const r = d[i], g = d[i + 1], b = d[i + 2];
-      const luma = (299 * r + 587 * g + 114 * b + 500) / 1000 | 0;
-      const ri = clamp(Math.round(luma + (r - luma) * q.sat));
-      const gi = clamp(Math.round(luma + (g - luma) * q.sat));
-      const bi = clamp(Math.round(luma + (b - luma) * q.sat));
-      const tr = LIN[tone[ri]], tg = LIN[tone[gi]], tb = LIN[tone[bi]];
+  const q = quality();
+  const tone = toneLUT(q);
+  const tl = new Float32Array(256);
+  for (let i = 0; i < 256; i++) tl[i] = srgbToLin(tone[i] / 255);
 
-      let bestErr = Infinity, bestW = 0, best = 0;
-      for (let e = 0; e < 6; e++) {
-        const ed = EDGES[e];
-        let w = ((tr - ed.pj[0]) * ed.d[0] + (tg - ed.pj[1]) * ed.d[1] +
-                 (tb - ed.pj[2]) * ed.d[2]) * ed.inv;
-        w = w < 0 ? 0 : (w > 1 ? 1 : w);
-        const dr = tr - (ed.pj[0] + w * ed.d[0]);
-        const dg = tg - (ed.pj[1] + w * ed.d[1]);
-        const db = tb - (ed.pj[2] + w * ed.d[2]);
-        const err = dr * dr + dg * dg + db * db;
-        if (err < bestErr) { bestErr = err; bestW = w; best = e; }
-      }
+  const N = W * H;
+  const L = new Float32Array(N), A = new Float32Array(N), B = new Float32Array(N);
+  const pal = OK.pal, edges = OK.edges;
+  const lab = [0, 0, 0];
 
-      const c = BN[bnRow + (x & 15)] / 255 < bestW ? EDGES[best].a : EDGES[best].b;
-      d[i] = PAL[c][0]; d[i + 1] = PAL[c][1]; d[i + 2] = PAL[c][2]; d[i + 3] = 255;
+  for (let i = 0; i < N; i++) {
+    const k = i * 4;
+    const r = d[k], g = d[k + 1], b = d[k + 2];
+    const luma = (299 * r + 587 * g + 114 * b + 500) / 1000 | 0;
+    const ri = clamp(Math.round(luma + (r - luma) * q.sat));
+    const gi = clamp(Math.round(luma + (g - luma) * q.sat));
+    const bi = clamp(Math.round(luma + (b - luma) * q.sat));
+    linToOklab(tl[ri], tl[gi], tl[bi], lab);
+
+    let bestErr = Infinity, bl = 0, ba = 0, bb = 0;
+    for (let e = 0; e < 6; e++) {
+      const ed = edges[e], p = ed.p, dv = ed.d;
+      let w = ((lab[0] - p[0]) * dv[0] + (lab[1] - p[1]) * dv[1] +
+               (lab[2] - p[2]) * dv[2]) * ed.inv;
+      w = w < 0 ? 0 : (w > 1 ? 1 : w);
+      const pl = p[0] + w * dv[0], pa = p[1] + w * dv[1], pb = p[2] + w * dv[2];
+      const dl = lab[0] - pl, da = lab[1] - pa, db = lab[2] - pb;
+      const err = dl * dl + da * da + db * db;
+      if (err < bestErr) { bestErr = err; bl = pl; ba = pa; bb = pb; }
     }
+    L[i] = bl; A[i] = ba; B[i] = bb;
   }
 
+  /* 误差扩散：cur = 本行要加的误差，nxt = 下一行；每行换方向减少条纹 */
+  const CLAMP_ERR = 0.25;
+  const packed = new Uint8Array(FB_BYTES);
+  let curL = new Float32Array(W), curA = new Float32Array(W), curB = new Float32Array(W);
+  let nxtL = new Float32Array(W), nxtA = new Float32Array(W), nxtB = new Float32Array(W);
+
+  for (let y = 0; y < H; y++) {
+    const step = (y & 1) ? -1 : 1;
+    for (let n = 0, x = step > 0 ? 0 : W - 1; n < W; n++, x += step) {
+      const i = y * W + x;
+      const l = L[i] + curL[x], a = A[i] + curA[x], b = B[i] + curB[x];
+
+      let k = 0, best = Infinity;
+      for (let p = 0; p < 4; p++) {
+        const dl = l - pal[p][0], da = a - pal[p][1], db = b - pal[p][2];
+        const dd = dl * dl + da * da + db * db;
+        if (dd < best) { best = dd; k = p; }
+      }
+      packed[(y * W + x) >> 2] |= k << (6 - 2 * (x & 3));
+
+      let er = l - pal[k][0], ea = a - pal[k][1], eb = b - pal[k][2];
+      er = er > CLAMP_ERR ? CLAMP_ERR : (er < -CLAMP_ERR ? -CLAMP_ERR : er);
+      ea = ea > CLAMP_ERR ? CLAMP_ERR : (ea < -CLAMP_ERR ? -CLAMP_ERR : ea);
+      eb = eb > CLAMP_ERR ? CLAMP_ERR : (eb < -CLAMP_ERR ? -CLAMP_ERR : eb);
+
+      const xf = x + step, xl = x - step;
+      if (xf >= 0 && xf < W) {
+        curL[xf] += er * 0.4375; curA[xf] += ea * 0.4375; curB[xf] += eb * 0.4375;
+      }
+      if (y + 1 < H) {
+        if (xl >= 0 && xl < W) {
+          nxtL[xl] += er * 0.1875; nxtA[xl] += ea * 0.1875; nxtB[xl] += eb * 0.1875;
+        }
+        nxtL[x] += er * 0.3125; nxtA[x] += ea * 0.3125; nxtB[x] += eb * 0.3125;
+        if (xf >= 0 && xf < W) {
+          nxtL[xf] += er * 0.0625; nxtA[xf] += ea * 0.0625; nxtB[xf] += eb * 0.0625;
+        }
+      }
+    }
+    let t;
+    t = curL; curL = nxtL; nxtL = t;
+    t = curA; curA = nxtA; nxtA = t;
+    t = curB; curB = nxtB; nxtB = t;
+    nxtL.fill(0); nxtA.fill(0); nxtB.fill(0);
+  }
+
+  /* 预览直接由打包结果还原，保证看到的就是屏幕上的 */
+  for (let y = 0; y < H; y++) {
+    const row = y * ROW_BYTES;
+    for (let x = 0; x < W; x++) {
+      const code = (packed[row + (x >> 2)] >> (6 - 2 * (x & 3))) & 3;
+      const i = (y * W + x) * 4;
+      const c = PAL[code];
+      d[i] = c[0]; d[i + 1] = c[1]; d[i + 2] = c[2]; d[i + 3] = 255;
+    }
+  }
   ctx.putImageData(img, 0, 0);
   $('ph').style.display = 'none';
   cv.style.display = 'block';
+
+  packedFrame = packed;
+  return (performance.now() - t0) / 1000;
 }
 
 function schedulePreview() {
   clearTimeout(previewTimer);
-  previewTimer = setTimeout(renderPreview, 120);
-}
-
-/* ---------- 编码到 90 KB 以内 ---------- */
-function toBlob(canvas, q) {
-  return new Promise(res => canvas.toBlob(res, 'image/jpeg', q));
-}
-
-async function encodeUnderLimit() {
-  for (const dim of [1, 0.8, 0.6, 0.45]) {
-    const cw = Math.round(W * dim), ch = Math.round(H * dim);
-    const c = document.createElement('canvas');
-    c.width = cw; c.height = ch;
-    const cx = c.getContext('2d');
-    cx.fillStyle = '#fff'; cx.fillRect(0, 0, cw, ch);
-
-    const { sx, sy, sw, sh } = coverParams(bitmap.width, bitmap.height);
-    cx.drawImage(bitmap, sx, sy, sw, sh, 0, 0, cw, ch);
-
-    for (const q of [0.8, 0.7, 0.6, 0.5, 0.4, 0.3]) {
-      const blob = await toBlob(c, q);
-      if (blob && blob.size <= MAX_BYTES) return blob;
-    }
-  }
-  return null;
+  previewTimer = setTimeout(renderFinal, 150);
 }
 
 /* ---------- 状态 ---------- */
@@ -336,25 +385,25 @@ async function upload() {
   if (!bitmap || busy) return;
   busy = true;
   $('send').disabled = true;
-  $('state').textContent = '压缩中…';
+  $('state').textContent = '生成四色图…';
+  await new Promise(r => setTimeout(r, 30));   // 先把状态文字刷到屏幕上
 
-  const blob = await encodeUnderLimit();
-  if (!blob) {
-    $('state').textContent = '图片压缩失败，换一张试试';
+  const secs = renderFinal();
+  if (!packedFrame) {
+    $('state').textContent = '生成失败，换一张试试';
     $('dot').className = 'dot err';
     busy = false; $('send').disabled = false;
     return;
   }
-  $('size').textContent = `上传尺寸 ${blob.size / 1024 | 0} KB`;
+  $('size').textContent =
+    `四色帧 ${FB_BYTES / 1024 | 0} KB · 本机渲染 ${secs.toFixed(2)} s`;
   $('state').textContent = '上传中…';
 
-  const q = quality();
-  const url = `/upload?expo=${q.expo}&gamma=${q.gamma}&con=${q.con}&sat=${q.sat}`;
   try {
-    const r = await fetch(url, {
+    const r = await fetch('/upload/raw', {
       method: 'POST',
-      headers: { 'Content-Type': 'image/jpeg' },
-      body: blob
+      headers: { 'Content-Type': 'application/octet-stream' },
+      body: packedFrame
     });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(j.msg || ('HTTP ' + r.status));
@@ -398,7 +447,7 @@ $('file').addEventListener('change', async e => {
     $('state').textContent = '无法读取这张图片';
     return;
   }
-  renderPreview();
+  renderFinal();
   $('size').textContent = `${f.name} · ${bitmap.width}×${bitmap.height}`;
   $('send').disabled = false;
 });

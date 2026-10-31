@@ -10,6 +10,7 @@ idf_component_register(
         "button.c"
         "image_decode.c"
         "image_pipeline.c"
+        "photo_store.c"
         "web_server.c"
     INCLUDE_DIRS "."
     EMBED_TXTFILES "web/index.html"

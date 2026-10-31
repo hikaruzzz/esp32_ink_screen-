@@ -1,0 +1,22 @@
+I (182) esp_image: segment 4: paddr=000e9bf8 vaddr=40380d18 sizeI (16093) epd: refresh pass 1/1 done in 15064 ms
+I (16163) jobs: 刷屏完成，剩余堆 86580 B
+I (71943) wifi:station: 32:5e:98:52:36:52 join, AID=1, bgn, 40U
+I (72423) esp_netif_lwip: DHCP server assigned IP to a client, IP is: 192.168.4.2
+I (72433) wifi:<ba-add>idx:2 (ifx:1, 32:5e:98:52:36:52), tid:0, ssn:0, winSize:64
+I (73253) wifi:<ba-add>idx:3 (ifx:1, 32:5e:98:52:36:52), tid:6, ssn:2, winSize:64
+I (82563) web: 收到 29680 B，堆剩余 52584 B
+I (82573) web: 画质：曝光 1.35 gamma 1.10 对比度 1.06 饱和 1.25
+I (82623) img: 管线就绪：曝光 1.35 gamma 1.10 对比度 1.06 饱和 1.25
+I (82633) img: 色板 黑33,32,34 白204,204,198 黄217,133,9 红109,31,22
+I (82633) jpeg: 源图 768x552，分量数 3
+I (82633) jpeg: 解码尺寸 768x552（scale=0），cover 比例 1.000，裁切起点 0.0,0.0
+I (85853) photo: 已保存 29680 B（画质 1.35/1.10/1.06/1.25）
+I (86113) epd: hw init: ready(reset)=1 ready(power-on)=1
+I (86113) epd: row 0/552 -> y=0
+I (86133) epd: row 100/552 -> y=200
+I (86163) epd: row 200/552 -> y=400
+I (86193) epd: row 300/552 -> y=1
+I (86223) epd: row 400/552 -> y=201
+I (86253) epd: row 500/552 -> y=401
+I (101343) epd: refresh pass 1/1 done in 15066 ms
+I (101413) jobs: 刷屏完成，剩余堆 82800 B

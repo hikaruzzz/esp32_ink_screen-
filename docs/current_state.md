@@ -72,6 +72,10 @@
 
 ## 墨水屏相框：epd_photo（2026-10-31）
 
+> 上传链路已改成「手机端渲染 → 设备只存帧」：见文末
+> [手机端渲染与原始帧上传](#手机端渲染与原始帧上传2026-10-31-晚)。
+> 下面的 JPEG 解码路径仍然保留，作为脚本/兼容入口。
+
 - 位置：`tools/epd_photo/`（独立工程，`idf.py -C tools/epd_photo build`）
 - 功能：开机建 SoftAP 热点 → 手机连上后打开 `http://192.168.4.1` 选图上传 →
   设备解码成四色并刷屏；BOOT 键短按切换热点开关，热点打开时屏幕上显示 SSID 与密码
@@ -140,3 +144,43 @@
   - 解码耗时是否明显变长（6 条边 × 每像素浮点运算，预计比原来多几百毫秒到 1 秒）
 - 备注：`tools/capture.py` 打开端口时原本会拉高 RTS/DTR，等于把 C3 按在复位里
   （表现为串口静默、热点消失）；已改为先置低再 open，需要复位时用 `--reset`
+
+## 手机端渲染与原始帧上传（2026-10-31 晚）
+
+用户问「解码是不是可以不在开发板上跑，手机浏览器算好再传给开发板」——
+可以，而且更好。已改成这条路：
+
+- 观察事实：C3 无硬件浮点，板上解 JPEG + 量化要几十秒；网页为了塞进 48 KB
+  把图压到 40 KB（0.8 bpp），这才是「像素很低、颜色像丢了」的主因
+- 新分工：
+  - 手机浏览器：cover 裁切 → 饱和度/曝光/对比度/gamma → **Oklab 色域映射到
+    四色凸包** → **Floyd–Steinberg 误差扩散** → 打包成 768×552 2bpp 原始帧
+    （105,984 B，每字节 4 像素、左侧像素在高位，与 `EPD_FB_BYTES` 完全一致）
+  - 开发板：`POST /upload/raw` 分块收（4 KB/块）→ 写 photo 分区 → 读回帧缓冲
+    → 刷屏。**不碰 JPEG、不做任何图像计算**
+- 为什么换掉蓝噪声：有序抖动在平坦区有规则纹理，误差扩散才接近别人彩墨屏的观感；
+  Oklab 里做是因为线性 RGB 里蓝色亮度极低，直接投影会变成一堵黑墙
+- 设备侧改动：
+  - `epd_se0398nz07.h/.c` 新增 `EPD_ROW_BYTES`/`EPD_FB_BYTES`/`epd_framebuffer()`
+  - `photo_store.c/h` 文件头升到 "EPD3"：magic+len+seq+**fmt**+4 float（32 B）；
+    `PHOTO_FMT_RAW2BPP` / `PHOTO_FMT_JPEG`；A/B 双槽、commit 时才写 magic 不变
+  - `app_jobs.c`：原始帧直接整块读进帧缓冲；JPEG 分支保留
+  - `web_server.c`：新增 `POST /upload/raw`（长度必须 105,984）；`/upload`(JPEG)
+    改为流式写 flash，上限由分区决定（单槽 262,116 B）
+  - `partitions.csv`：`photo` 由 64 KB 扩到 512 KB（两个 256 KB 槽）
+- 网页侧：`index.html` 的量化改成上面的 fsgm 算法，预览直接用打包结果还原，
+  **所见即所得**；去掉 40 KB 压缩和蓝噪声表
+- 主机工具：
+  - `python tools/epd_preview.py 图.jpg --algo fsgm`（新增 `fs`/`fsok` 对照）
+  - `python tools/fb_crosscheck.py 图.png`：Node 跑网页里的同一段脚本 vs numpy
+    参考实现，逐像素比对。当前 **99.82% 像素一致**（差异来自 JS float32 与
+    numpy float64 的舍入；JS 渲染 768×552 约 0.5 s）
+  - 对照图：`evidence/M2/{tp,photo}_{edge,fs,fsok,fsgm}.png`
+- 已实测（COM4）：编译通过（`epd_photo.bin` 0xee340，余量 52%）；
+  开机日志确认 `photo 分区 524288 B @0x200000，2 个槽，每槽 262144 B`；
+  开机状态页刷新 15064 ms（`evidence/M2/raw_path_boot.log`）
+- 待确认（需手机上实测，主机不进热点）：
+  - 手机浏览器的渲染耗时与发热（预计 0.5~1.5 s）
+  - 105,984 B 上传在 SoftAP 下的耗时
+  - 实屏观感是否比蓝噪声版本细腻，色板数值是否还需微调
+  - 关热点（BOOT 键）后是否能还原上一张照片

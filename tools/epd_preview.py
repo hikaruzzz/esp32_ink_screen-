@@ -4,19 +4,21 @@
 用途：在电脑上把 JPEG 走一遍与固件相同的处理管线，输出 PNG 预览，
 用来调参数、对比算法、复现问题，不必反复烧录和等 15 秒刷屏。
 
-算法（与固件 image_decode.c 保持一致）：
+算法 --algo fsgm（手机网页用的是这一条，也是默认目标）：
   1. cover 裁切到 768x552
   2. sRGB 域：饱和度 → 曝光(线性域) → 对比度 → 伽马
-  3. 线性 RGB 下，把每个像素投影到「四色凸包最合适的边」上，
-     得到两种色料的混合比例 w（线性光混合，保证纸面观感亮度正确）
-  4. 用蓝噪声阈值掩码按比例 w 选色 → 2bpp 索引
+  3. 转到 Oklab，把每个像素投影到「四色凸包最合适的边」上（丢弃印不出的色度）
+  4. Floyd–Steinberg 误差扩散（蛇形扫描）选四色之一 → 2bpp 索引
+
+其它 --algo 用于对照：edge（板上旧的蓝噪声管线）、fs（线性 RGB + FS）、
+fsok（Oklab + FS、不做色域映射）、bayer4（更旧的 4x4 Bayer）。
 
 用法：
-  python tools/epd_preview.py 图片.jpg -o out.png
+  python tools/epd_preview.py 图片.jpg --algo fsgm -o out.png
   python tools/epd_preview.py 图片.jpg --exposure 1.4 --gamma 1.2 --contrast 1.1
-  python tools/epd_preview.py 图片.jpg --algo bayer4      # 旧算法（对照）
   python tools/epd_preview.py 图片.jpg --grid-bug         # 复现 MCU 边界白格栅
   python tools/epd_preview.py 图片.jpg --scale 2          # 放大看观感
+  python tools/fb_crosscheck.py 图片.png                  # 网页算法 vs 本实现
 """
 
 from __future__ import annotations
@@ -31,12 +33,13 @@ W, H = 768, 552
 
 # 面板四色（sRGB 近似值）。真实墨水屏的白不是 255、黑不是 0，
 # 用理想色板会让抖动去追屏幕根本到不了的亮度，累积误差导致发灰发暗。
-# 数值待实板标定，先取 BWRY 面板常见测量区间。
+# 数值来自实拍照采样（docs/calibration.md）：以纸白为参考归一化。
+# 必须与固件 image_pipeline.c 的 k_pal_srgb、网页 index.html 的 PAL 一致。
 PALETTE = np.array([
-    [32, 32, 32],     # EPD_BLACK  (0)
+    [33, 32, 34],     # EPD_BLACK  (0)
     [204, 204, 198],  # EPD_WHITE  (1)
-    [222, 190, 74],   # EPD_YELLOW (2)
-    [166, 62, 52],    # EPD_RED    (3)
+    [217, 133, 9],    # EPD_YELLOW (2) —— 这块屏的黄偏橙
+    [109, 31, 22],    # EPD_RED    (3)
 ], dtype=np.float64)
 
 BAYER4 = np.array([
@@ -184,6 +187,144 @@ def mix_edges_full(lin: np.ndarray, mask: np.ndarray) -> np.ndarray:
     return np.where(mask < best_w, best_a, best_b)
 
 
+def algo_fs(srgb: np.ndarray, strength: float = 1.0) -> np.ndarray:
+    """误差扩散（Floyd–Steinberg，蛇形扫描），线性光下最近色。
+
+    手机浏览器会跑同一套算法后再上传，所以这里的输出 = 实屏效果。
+    """
+    pal = srgb_to_lin(PALETTE / 255.0)
+    buf = srgb_to_lin(srgb).copy()
+    h, w, _ = buf.shape
+    idx = np.zeros((h, w), dtype=np.uint8)
+
+    for y in range(h):
+        step = 1 if y % 2 == 0 else -1
+        for x in (range(w) if step > 0 else range(w - 1, -1, -1)):
+            c = np.clip(buf[y, x], 0.0, 1.0)
+            pal_d = ((pal - c) ** 2).sum(axis=1)
+            k = int(pal_d.argmin())
+            idx[y, x] = k
+            err = (c - pal[k]) * strength
+            if 0 <= x + step < w:
+                buf[y, x + step] += err * (7 / 16)
+            if y + 1 < h:
+                if 0 <= x - step < w:
+                    buf[y + 1, x - step] += err * (3 / 16)
+                buf[y + 1, x] += err * (5 / 16)
+                if 0 <= x + step < w:
+                    buf[y + 1, x + step] += err * (1 / 16)
+    return idx
+
+
+def lin_to_oklab(lin: np.ndarray) -> np.ndarray:
+    r, g, b = lin[..., 0], lin[..., 1], lin[..., 2]
+    l = 0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b
+    m = 0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b
+    s = 0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b
+    l_, m_, s_ = np.cbrt(l), np.cbrt(m), np.cbrt(s)
+    L = 0.2104542553 * l_ + 0.7936177850 * m_ - 0.0040720468 * s_
+    A = 1.9779984951 * l_ - 2.4285922050 * m_ + 0.4505937099 * s_
+    B = 0.0259040371 * l_ + 0.7827717662 * m_ - 0.8086757660 * s_
+    return np.stack([L, A, B], axis=-1)
+
+
+def algo_fs_ok(srgb: np.ndarray, strength: float = 1.0,
+               clamp_err: float = 0.25) -> np.ndarray:
+    """Oklab 里最近色 + 误差扩散；误差夹紧，避免不可达色（蓝/绿）漂移。"""
+    pal = lin_to_oklab(srgb_to_lin(PALETTE / 255.0))
+    buf = lin_to_oklab(srgb_to_lin(srgb)).copy()
+    h, w, _ = buf.shape
+    idx = np.zeros((h, w), dtype=np.uint8)
+
+    for y in range(h):
+        step = 1 if y % 2 == 0 else -1
+        for x in (range(w) if step > 0 else range(w - 1, -1, -1)):
+            c = buf[y, x]
+            k = int(((pal - c) ** 2).sum(axis=1).argmin())
+            idx[y, x] = k
+            err = np.clip((c - pal[k]) * strength, -clamp_err, clamp_err)
+            if 0 <= x + step < w:
+                buf[y, x + step] += err * (7 / 16)
+            if y + 1 < h:
+                if 0 <= x - step < w:
+                    buf[y + 1, x - step] += err * (3 / 16)
+                buf[y + 1, x] += err * (5 / 16)
+                if 0 <= x + step < w:
+                    buf[y + 1, x + step] += err * (1 / 16)
+    return idx
+
+
+def ok_gamut_map(srgb: np.ndarray) -> np.ndarray:
+    """在 Oklab 里把每个像素投影到四色凸包最合适的一条边上。
+
+    凸包外的颜色（蓝、绿、青）会被压到最近的可表示颜色 —— 丢掉的是
+    根本印不出来的色度，亮度关系保留，所以蓝天不会变成一片白。
+    """
+    return ok_gamut_map_lin(srgb_to_lin(srgb))
+
+
+def ok_gamut_map_lin(lin: np.ndarray) -> np.ndarray:
+    """同 ok_gamut_map，但输入直接是线性 RGB（0..1）。"""
+    pal = lin_to_oklab(srgb_to_lin(PALETTE / 255.0))
+    lab = lin_to_oklab(lin)
+
+    best_err = np.full(lab.shape[:2], np.inf)
+    best = lab.copy()
+    for i in range(4):
+        for j in range(i + 1, 4):
+            d = pal[i] - pal[j]
+            den = float(d @ d)
+            if den < 1e-9:
+                continue
+            w = np.clip(((lab - pal[j]) @ d) / den, 0.0, 1.0)
+            mix = pal[j] + w[..., None] * d
+            err = ((lab - mix) ** 2).sum(axis=2)
+            take = err < best_err
+            best_err = np.where(take, err, best_err)
+            best = np.where(take[..., None], mix, best)
+    return best
+
+
+def algo_fs_gm(srgb: np.ndarray, strength: float = 1.0,
+               clamp_err: float = 0.25, jitter: float = 0.0) -> np.ndarray:
+    """先色域映射到凸包，再做误差扩散 —— 抖动只负责混色，不再背着
+    印不出来的颜色漂移。手机端用的是同一个算法。
+
+    jitter：给误差加一点确定性的小扰动，打散平坦区域的横向条纹。
+    """
+    return algo_fs_gm_lin(srgb_to_lin(srgb), strength, clamp_err, jitter)
+
+
+def algo_fs_gm_lin(lin: np.ndarray, strength: float = 1.0,
+                   clamp_err: float = 0.25, jitter: float = 0.0) -> np.ndarray:
+    """同 algo_fs_gm，但输入直接是线性 RGB（0..1）。"""
+    pal = lin_to_oklab(srgb_to_lin(PALETTE / 255.0))
+    buf = ok_gamut_map_lin(lin)
+    h, w, _ = buf.shape
+    idx = np.zeros((h, w), dtype=np.uint8)
+    rng = np.random.default_rng(20261031)
+
+    for y in range(h):
+        step = 1 if y % 2 == 0 else -1
+        for x in (range(w) if step > 0 else range(w - 1, -1, -1)):
+            c = buf[y, x]
+            k = int(((pal - c) ** 2).sum(axis=1).argmin())
+            idx[y, x] = k
+            err = (c - pal[k]) * strength
+            if jitter > 0:
+                err = err + (rng.random(3) - 0.5) * jitter
+            err = np.clip(err, -clamp_err, clamp_err)
+            if 0 <= x + step < w:
+                buf[y, x + step] += err * (7 / 16)
+            if y + 1 < h:
+                if 0 <= x - step < w:
+                    buf[y + 1, x - step] += err * (3 / 16)
+                buf[y + 1, x] += err * (5 / 16)
+                if 0 <= x + step < w:
+                    buf[y + 1, x + step] += err * (1 / 16)
+    return idx
+
+
 def algo_bayer4(rgb: np.ndarray, mask: np.ndarray) -> np.ndarray:
     """旧算法：±40 抖动 + 理想色板最近色（对照用）。"""
     ideal = np.array([[0, 0, 0], [255, 255, 255], [255, 200, 0], [190, 25, 40]],
@@ -220,7 +361,12 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="四色墨水屏图片预处理预览")
     ap.add_argument("image")
     ap.add_argument("-o", "--out", default=None)
-    ap.add_argument("--algo", choices=["edge", "bayer4"], default="edge")
+    ap.add_argument("--algo", choices=["edge", "bayer4", "fs", "fsok", "fsgm"],
+                    default="edge")
+    ap.add_argument("--fs-strength", type=float, default=1.0,
+                    help="误差扩散强度，0=不下传误差，1=标准 FS")
+    ap.add_argument("--fs-jitter", type=float, default=0.0,
+                    help="误差扰动幅度（Oklab 单位），用于打散条纹")
     ap.add_argument("--exposure", type=float, default=1.35)
     ap.add_argument("--gamma", type=float, default=1.10)
     ap.add_argument("--contrast", type=float, default=1.05)
@@ -236,6 +382,15 @@ def main() -> int:
 
     if args.algo == "bayer4":
         idx = algo_bayer4(rgb, noise_mask(rgb.shape[:2], "bayer4"))
+    elif args.algo == "fs":
+        toned = tone_map(rgb, args.exposure, args.gamma, args.contrast, args.sat)
+        idx = algo_fs(toned, args.fs_strength)
+    elif args.algo == "fsok":
+        toned = tone_map(rgb, args.exposure, args.gamma, args.contrast, args.sat)
+        idx = algo_fs_ok(toned, args.fs_strength)
+    elif args.algo == "fsgm":
+        toned = tone_map(rgb, args.exposure, args.gamma, args.contrast, args.sat)
+        idx = algo_fs_gm(toned, args.fs_strength, jitter=args.fs_jitter)
     else:
         toned = tone_map(rgb, args.exposure, args.gamma, args.contrast, args.sat)
         lin = srgb_to_lin(toned)

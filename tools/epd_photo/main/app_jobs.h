@@ -4,14 +4,12 @@
 
 #include "esp_err.h"
 
-#include "image_pipeline.h"
-
 /*
  * 显示队列：面板和 SPI 只由一个任务（display）访问，所有需要“改画面”的操作
  * 都投递成作业，串行执行：
  *   - 重刷当前帧缓冲
- *   - 解码一张新图片并刷屏
- *   - 打开/关闭 Wi-Fi 热点并刷新状态页
+ *   - 把 photo 分区里的照片解码刷屏（上传完成、关热点）
+ *   - 打开/关闭 Wi-Fi 热点
  * BOOT 键、HTTP 上传、开机画面都走这里，避免并发写帧缓冲。
  */
 esp_err_t app_jobs_init(void);
@@ -19,10 +17,9 @@ esp_err_t app_jobs_init(void);
 /* 重刷当前帧缓冲（若队列里已有更新，自动忽略） */
 esp_err_t app_jobs_submit_refresh(void);
 
-/* 提交一张 JPEG：成功后接管 data 所有权（内部 free），失败时调用者需自行释放。
- * params 为 NULL 时用 EPD_IMG_PARAMS_DEFAULT()。 */
-esp_err_t app_jobs_submit_upload(uint8_t *data, size_t len,
-                                 const epd_img_params_t *params);
+/* 解码 photo 分区里最后一张照片并刷屏；失败时状态字会给出原因。
+ * 上传接口把 JPEG 流式写进分区后调用这里。 */
+esp_err_t app_jobs_submit_decode(void);
 
 /* 切换热点开关 */
 esp_err_t app_jobs_submit_toggle_wifi(void);

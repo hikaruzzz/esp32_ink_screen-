@@ -19,6 +19,7 @@
 #include "esp_log.h"
 #include "esp_system.h"
 #include "epd_se0398nz07.h"
+#include "photo_store.h"
 #include "screen_ui.h"
 #include "web_server.h"
 #include "wifi_ap.h"
@@ -39,6 +40,9 @@ void app_main(void)
     const app_config_t *cfg = app_config_get();
 
     ESP_ERROR_CHECK(epd_init());
+
+    /* 照片分区缺失只影响“关热点后还原照片”，不该阻止启动 */
+    photo_store_init();
 
     /* 先起热点：拿到地址后画状态页（此时显示任务还没创建，不存在并发） */
     ESP_ERROR_CHECK(wifi_ap_start(cfg->ap_ssid, cfg->ap_password));

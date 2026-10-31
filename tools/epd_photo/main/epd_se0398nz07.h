@@ -17,6 +17,11 @@
 #define EPD_WIDTH  768
 #define EPD_HEIGHT 552
 
+/* 帧缓冲：2 bpp，每字节 4 像素（左侧像素在高位），按显示行 p=0..551 排列。
+ * 整帧 105,984 B —— 与网页上传的原始 2bpp 数据布局完全相同。 */
+#define EPD_ROW_BYTES (EPD_WIDTH / 4)
+#define EPD_FB_BYTES  (EPD_ROW_BYTES * EPD_HEIGHT)
+
 #define EPD_PIN_DIN  7
 #define EPD_PIN_CLK  6
 #define EPD_PIN_CS   10
@@ -42,6 +47,9 @@ typedef enum {
 esp_err_t epd_init(void);
 
 /* 帧缓冲操作（2 bpp，每字节 4 像素，左侧像素在高位） */
+/* 直接访问整帧缓冲，便于把手机端渲染好的 2bpp 数据整块拷进来 */
+uint8_t *epd_framebuffer(void);
+
 void epd_fill(epd_color_t color);
 void epd_set_pixel(int x, int y, epd_color_t color);
 void epd_fill_rect(int x, int y, int w, int h, epd_color_t color);

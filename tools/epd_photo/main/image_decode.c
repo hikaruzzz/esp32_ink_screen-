@@ -5,6 +5,9 @@
  * 的逐 MCU 回调：每解出一个 MCU，立即按 cover 映射量化成 2 bpp 写进
  * 已有的帧缓冲，内存占用只有一个约 4 KB 的工作池。
  *
+ * 数据来源可以是内存，也可以是 photo 分区（顺序读 flash）。
+ * 后者让上传的图不再受内存限制：网页可以传几百 KB 的高质量 JPEG。
+ *
  * tjpgd 的 JDEC.width/height 是源图尺寸，回调里的 rect 是缩小后的坐标
  * （x >> scale），映射时用缩小后的尺寸计算。
  */
@@ -21,15 +24,18 @@
 
 #include "epd_se0398nz07.h"
 #include "image_pipeline.h"
+#include "photo_store.h"
 
 static const char *TAG = "jpeg";
 
 #define JD_POOL_SIZE 4096
 
 typedef struct {
-    const uint8_t *data;
+    bool flash;             /* true: 从 photo 分区顺序读 */
+    const uint8_t *data;    /* 内存来源 */
     size_t len;
     size_t pos;
+    photo_src_t fs;         /* flash 来源的读游标 */
 } jpeg_src_t;
 
 /* jd_in / jd_out 通过 jd->device 拿不到私有参数之外的映射参数，
@@ -46,6 +52,18 @@ static float s_off_y;
 static size_t jd_in(JDEC *jd, uint8_t *buf, size_t n)
 {
     jpeg_src_t *s = (jpeg_src_t *)jd->device;
+
+    if (s->flash) {
+        if (buf == NULL) { /* tjpgd 用 NULL 表示“跳过 n 字节” */
+            if (n > s->fs.len - s->fs.pos) {
+                n = s->fs.len - s->fs.pos;
+            }
+            s->fs.pos += n;
+            return n;
+        }
+        return photo_store_read(&s->fs, buf, n);
+    }
+
     const size_t avail = s->len - s->pos;
     if (n > avail) {
         n = avail;
@@ -119,19 +137,10 @@ static int jd_out(JDEC *jd, void *bitmap, JRECT *rect)
     return 1; /* 继续解码；返回 0 表示中止 */
 }
 
-esp_err_t epd_image_render_jpeg(const uint8_t *jpeg, size_t len,
-                                const epd_img_params_t *params,
-                                int *out_src_w, int *out_src_h)
+static esp_err_t render(const epd_img_params_t *params,
+                        int *out_src_w, int *out_src_h)
 {
-    if (jpeg == NULL || len < 4) {
-        return ESP_ERR_INVALID_ARG;
-    }
-
     epd_pipeline_init(params);
-
-    s_src.data = jpeg;
-    s_src.len = len;
-    s_src.pos = 0;
 
     void *pool = malloc(JD_POOL_SIZE);
     if (pool == NULL) {
@@ -190,4 +199,36 @@ esp_err_t epd_image_render_jpeg(const uint8_t *jpeg, size_t len,
         return ESP_ERR_INVALID_RESPONSE;
     }
     return ESP_OK;
+}
+
+esp_err_t epd_image_render_jpeg(const uint8_t *jpeg, size_t len,
+                                const epd_img_params_t *params,
+                                int *out_src_w, int *out_src_h)
+{
+    if (jpeg == NULL || len < 4) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    memset(&s_src, 0, sizeof(s_src));
+    s_src.flash = false;
+    s_src.data = jpeg;
+    s_src.len = len;
+    s_src.pos = 0;
+
+    return render(params, out_src_w, out_src_h);
+}
+
+esp_err_t epd_image_render_jpeg_flash(size_t len, int slot,
+                                      const epd_img_params_t *params,
+                                      int *out_src_w, int *out_src_h)
+{
+    if (len < 4) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    memset(&s_src, 0, sizeof(s_src));
+    s_src.flash = true;
+    photo_store_src_init(&s_src.fs, slot, len);
+
+    return render(params, out_src_w, out_src_h);
 }

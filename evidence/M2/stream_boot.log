@@ -1,0 +1,47 @@
+I (182) esp_image: segment 4: paddr=000e9e58 vaddr=40380be0 sizeI (534) epd: hw init: ready(reset)=1 ready(power-on)=1
+I (534) epd: init done: 768x552, panel=A0, spi=8 MHz
+I (534) photo: photo 分区 524288 B @0x200000，2 个槽，每槽 262144 B
+I (534) pp: pp rom version: 9387209
+I (534) net80211: net80211 rom version: 9387209
+I (544) wifi:wifi driver task: 3fcbf1f8, prio:23, stack:6656, core=0
+I (544) wifi:wifi firmware version: e12a754
+I (544) wifi:wifi certification version: v7.0
+I (544) wifi:config NVS flash: enabled
+I (544) wifi:config nano formatting: disabled
+I (544) wifi:Init data frame dynamic rx buffer num: 32
+I (544) wifi:Init static rx mgmt buffer num: 5
+I (544) wifi:Init management short buffer num: 32
+I (544) wifi:Init dynamic tx buffer num: 32
+I (544) wifi:Init static tx FG buffer num: 2
+I (554) wifi:Init static rx buffer size: 1600
+I (554) wifi:Init static rx buffer num: 10
+I (554) wifi:Init dynamic rx buffer num: 32
+I (554) wifi_init: rx ba win: 6
+I (554) wifi_init: accept mbox: 6
+I (554) wifi_init: tcpip mbox: 32
+I (554) wifi_init: udp mbox: 6
+I (554) wifi_init: tcp mbox: 6
+I (554) wifi_init: tcp tx win: 5760
+I (554) wifi_init: tcp rx win: 5760
+I (554) wifi_init: tcp mss: 1440
+I (554) wifi_init: WiFi IRAM OP enabled
+I (554) wifi_init: WiFi RX IRAM OP enabled
+I (554) phy_init: phy_version 1235,8bd8c6fc,Apr 13 2026,18:46:20
+I (594) wifi:mode : softAP (48:f6:ee:15:78:c9)
+I (604) wifi:Total power save buffer number: 16
+I (604) wifi:Init max length of beacon: 752/752
+I (604) wifi:Init max length of beacon: 752/752
+I (604) esp_netif_lwip: DHCP server started on interface WIFI_AP_DEF with IP: 192.168.4.1
+I (604) wifi_ap: 热点已启动 SSID="EPD-Photo" 加密方式=WPA2 地址=http://192.168.4.1
+I (624) web: 网页服务已启动，端口 80
+I (624) epd_photo: 就绪，剩余堆 82168 B
+I (624) main_task: Returned from app_main()
+I (874) epd: hw init: ready(reset)=1 ready(power-on)=1
+I (874) epd: row 0/552 -> y=0
+I (894) epd: row 100/552 -> y=200
+I (924) epd: row 200/552 -> y=400
+I (954) epd: row 300/552 -> y=1
+I (984) epd: row 400/552 -> y=201
+I (1014) epd: row 500/552 -> y=401
+I (16094) epd: refresh pass 1/1 done in 15064 ms
+I (16164) jobs: 刷屏完成，剩余堆 86608 B

@@ -6,19 +6,20 @@
 
 #include "app_config.h"
 #include "app_jobs.h"
-#include "esp_heap_caps.h"
+#include "epd_se0398nz07.h"
 #include "esp_http_server.h"
 #include "esp_log.h"
 #include "esp_system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "photo_store.h"
 #include "wifi_ap.h"
 
 static const char *TAG = "web";
 
-/* 上传上限：开机后（Wi-Fi + httpd 已占用）实测剩余堆约 82 KB，
- * 这里保守取 48 KB，网页端会压到 40 KB 以内再发。 */
-#define UPLOAD_MAX_BYTES (48 * 1024)
+/* 上传分块大小：只占这么多内存，JPEG 边收边写进 photo 分区，
+ * 因此上限由分区大小决定（photo_store_capacity()，约 256 KB/槽）。 */
+#define UPLOAD_CHUNK     4096
 #define CONFIG_BODY_MAX  256
 
 /* IDF v6.1 的 EMBED_TXTFILES 按文件名生成符号（不保留 web/ 目录前缀），
@@ -66,20 +67,37 @@ static esp_err_t status_get(httpd_req_t *req)
     return httpd_resp_send(req, json, HTTPD_RESP_USE_STRLEN);
 }
 
-/* 简单判断是否像一张 JPEG（SOI 开头，结尾附近有 EOI） */
-static bool looks_like_jpeg(const uint8_t *buf, size_t len)
+/* 结尾这一小段里有没有 EOI（FFD9）。分块接收，只能事后看最后 16 字节。 */
+static bool has_eoi(const uint8_t *tail, size_t len)
 {
-    if (len < 4 || buf[0] != 0xFF || buf[1] != 0xD8) {
-        return false;
-    }
-    const size_t tail = (len >= 16) ? 16 : len;
-    for (size_t i = 0; i + 1 < tail; ++i) {
-        const size_t p = len - tail + i;
-        if (buf[p] == 0xFF && buf[p + 1] == 0xD9) {
+    for (size_t i = 0; i + 1 < len; ++i) {
+        if (tail[i] == 0xFF && tail[i + 1] == 0xD9) {
             return true;
         }
     }
     return false;
+}
+
+/* 把请求体流式写进 photo 分区当前槽。成功返回 ESP_OK，*got_out 为实收字节数。 */
+static esp_err_t recv_body_to_flash(httpd_req_t *req, uint8_t *chunk,
+                                    size_t *got_out)
+{
+    size_t got = 0;
+    while (got < (size_t)req->content_len) {
+        const int r = httpd_req_recv(req, (char *)chunk, UPLOAD_CHUNK);
+        if (r == HTTPD_SOCK_ERR_TIMEOUT) {
+            continue;
+        }
+        if (r < 0) {
+            return ESP_ERR_TIMEOUT;
+        }
+        if (photo_store_write(got, chunk, (size_t)r) != ESP_OK) {
+            return ESP_FAIL;
+        }
+        got += (size_t)r;
+    }
+    *got_out = got;
+    return ESP_OK;
 }
 
 /* 从查询串里取一个浮点参数，缺省或解析失败时保留原值 */
@@ -104,6 +122,13 @@ static void query_float(httpd_req_t *req, const char *key, float *out)
     }
 }
 
+/*
+ * 上传：边收边写进 photo 分区，内存只占一个 4 KB 的块。
+ *
+ * 先 begin（擦目标槽、清掉 magic）→ 逐块 write → 全部收完且像 JPEG
+ * 才 commit（写 magic 和参数）。中途断网/掉电时这个槽保持无效，
+ * 另一个槽里的上一张照片还在，开机/关热点仍能还原。
+ */
 static esp_err_t upload_post(httpd_req_t *req)
 {
     httpd_resp_set_type(req, "application/json; charset=utf-8");
@@ -112,38 +137,70 @@ static esp_err_t upload_post(httpd_req_t *req)
         httpd_resp_set_status(req, "400 Bad Request");
         return httpd_resp_sendstr(req, "{\"ok\":false,\"msg\":\"空请求\"}");
     }
-    if (req->content_len > UPLOAD_MAX_BYTES) {
+
+    const size_t cap = photo_store_capacity();
+    if (req->content_len > cap) {
         httpd_resp_set_status(req, "413 Payload Too Large");
-        return httpd_resp_sendstr(req, "{\"ok\":false,\"msg\":\"图片太大，请压缩到 40KB 以内\"}");
+        return httpd_resp_send(req,
+                               "{\"ok\":false,\"msg\":\"图片太大，请减小尺寸或降低质量\"}",
+                               HTTPD_RESP_USE_STRLEN);
     }
 
-    uint8_t *buf = heap_caps_malloc(req->content_len, MALLOC_CAP_8BIT);
-    if (buf == NULL) {
+    uint8_t *chunk = malloc(UPLOAD_CHUNK);
+    if (chunk == NULL) {
         httpd_resp_set_status(req, "507 Insufficient Storage");
         return httpd_resp_sendstr(req, "{\"ok\":false,\"msg\":\"内存不足\"}");
     }
 
+    esp_err_t err = photo_store_begin(req->content_len);
+    if (err != ESP_OK) {
+        free(chunk);
+        httpd_resp_set_status(req, "507 Insufficient Storage");
+        return httpd_resp_sendstr(req, "{\"ok\":false,\"msg\":\"闪存写入失败\"}");
+    }
+
+    uint8_t tail[16] = {0}; /* 最后一段，用来找 EOI */
     size_t got = 0;
-    while (got < req->content_len) {
-        const int r = httpd_req_recv(req, (char *)buf + got, req->content_len - got);
+    bool is_jpeg = true;
+
+    while (got < (size_t)req->content_len) {
+        const int r = httpd_req_recv(req, (char *)chunk, UPLOAD_CHUNK);
         if (r == HTTPD_SOCK_ERR_TIMEOUT) {
             continue;
         }
-        if (r <= 0) {
-            free(buf);
+        if (r < 0) {
+            free(chunk);
             httpd_resp_set_status(req, "408 Request Timeout");
             return httpd_resp_sendstr(req, "{\"ok\":false,\"msg\":\"接收中断\"}");
         }
+        if (got == 0 && (r < 2 || chunk[0] != 0xFF || chunk[1] != 0xD8)) {
+            is_jpeg = false;
+            break;
+        }
+        if (photo_store_write(got, chunk, (size_t)r) != ESP_OK) {
+            free(chunk);
+            httpd_resp_set_status(req, "507 Insufficient Storage");
+            return httpd_resp_sendstr(req, "{\"ok\":false,\"msg\":\"闪存写入失败\"}");
+        }
         got += (size_t)r;
+
+        const size_t keep = ((size_t)r >= sizeof(tail)) ? sizeof(tail) : (size_t)r;
+        memcpy(tail, chunk + (size_t)r - keep, keep);
+        if (keep < sizeof(tail)) {
+            memset(tail + keep, 0, sizeof(tail) - keep);
+        }
     }
+    free(chunk);
 
-    ESP_LOGI(TAG, "收到 %u B，堆剩余 %u B", (unsigned)got,
-             (unsigned)esp_get_free_heap_size());
-
-    if (!looks_like_jpeg(buf, got)) {
-        free(buf);
+    if (!is_jpeg) {
         httpd_resp_set_status(req, "415 Unsupported Media Type");
         return httpd_resp_sendstr(req, "{\"ok\":false,\"msg\":\"不是有效的 JPEG\"}");
+    }
+    if (got != (size_t)req->content_len || !has_eoi(tail, sizeof(tail))) {
+        httpd_resp_set_status(req, "415 Unsupported Media Type");
+        return httpd_resp_send(req,
+                               "{\"ok\":false,\"msg\":\"文件不完整，请重试\"}",
+                               HTTPD_RESP_USE_STRLEN);
     }
 
     epd_img_params_t params = EPD_IMG_PARAMS_DEFAULT();
@@ -152,16 +209,76 @@ static esp_err_t upload_post(httpd_req_t *req)
     query_float(req, "con", &params.contrast);
     query_float(req, "sat", &params.saturation);
     epd_img_params_clamp(&params);
-    ESP_LOGI(TAG, "画质：曝光 %.2f gamma %.2f 对比度 %.2f 饱和 %.2f",
+    ESP_LOGI(TAG, "收到 %u B（上限 %u B），堆剩余 %u B；画质 %.2f/%.2f/%.2f/%.2f",
+             (unsigned)got, (unsigned)cap, (unsigned)esp_get_free_heap_size(),
              params.exposure, params.gamma, params.contrast, params.saturation);
 
-    if (app_jobs_submit_upload(buf, got, &params) != ESP_OK) {
-        free(buf);
-        httpd_resp_set_status(req, "503 Service Unavailable");
-        return httpd_resp_sendstr(req, "{\"ok\":false,\"msg\":\"设备忙\"}");
+    /* 先回包再排作业：刷屏要 15 s，别让手机等在这上面 */
+    httpd_resp_sendstr(req, "{\"ok\":true,\"msg\":\"已收到，开始刷屏\"}");
+
+    err = photo_store_commit(got, PHOTO_FMT_JPEG, &params);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "提交失败 %s", esp_err_to_name(err));
+        return err;
+    }
+    if (app_jobs_submit_decode() != ESP_OK) {
+        ESP_LOGW(TAG, "显示任务忙，照片已保存，稍后可关/开热点重刷");
+    }
+    return ESP_OK;
+}
+
+/*
+ * 原始帧上传：手机网页已经完成裁切、调色和四色抖动，这里收到的就是
+ * 面板帧缓冲的 2bpp 数据（105,984 B）。开发板只负责存进 flash 再刷屏，
+ * 不做任何图像计算 —— 所见即所得，也省掉 JPEG 解码的十几秒。
+ */
+static esp_err_t raw_upload_post(httpd_req_t *req)
+{
+    httpd_resp_set_type(req, "application/json; charset=utf-8");
+
+    if (req->content_len != EPD_FB_BYTES) {
+        httpd_resp_set_status(req, "400 Bad Request");
+        return httpd_resp_sendstr(
+            req, "{\"ok\":false,\"msg\":\"原始帧长度必须是 105984 字节\"}");
     }
 
-    return httpd_resp_sendstr(req, "{\"ok\":true,\"msg\":\"已收到，开始刷屏\"}");
+    uint8_t *chunk = malloc(UPLOAD_CHUNK);
+    if (chunk == NULL) {
+        httpd_resp_set_status(req, "507 Insufficient Storage");
+        return httpd_resp_sendstr(req, "{\"ok\":false,\"msg\":\"内存不足\"}");
+    }
+
+    esp_err_t err = photo_store_begin(EPD_FB_BYTES);
+    if (err != ESP_OK) {
+        free(chunk);
+        httpd_resp_set_status(req, "507 Insufficient Storage");
+        return httpd_resp_sendstr(req, "{\"ok\":false,\"msg\":\"闪存写入失败\"}");
+    }
+
+    size_t got = 0;
+    err = recv_body_to_flash(req, chunk, &got);
+    free(chunk);
+
+    if (err != ESP_OK || got != EPD_FB_BYTES) {
+        ESP_LOGE(TAG, "原始帧接收失败：%s，收到 %u B", esp_err_to_name(err),
+                 (unsigned)got);
+        httpd_resp_set_status(req, "408 Request Timeout");
+        return httpd_resp_sendstr(req, "{\"ok\":false,\"msg\":\"接收中断\"}");
+    }
+
+    ESP_LOGI(TAG, "收到原始帧 %u B，堆剩余 %u B", (unsigned)got,
+             (unsigned)esp_get_free_heap_size());
+    httpd_resp_sendstr(req, "{\"ok\":true,\"msg\":\"已收到，开始刷屏\"}");
+
+    err = photo_store_commit(got, PHOTO_FMT_RAW2BPP, NULL);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "提交失败 %s", esp_err_to_name(err));
+        return err;
+    }
+    if (app_jobs_submit_decode() != ESP_OK) {
+        ESP_LOGW(TAG, "显示任务忙，画面已保存，稍后可关/开热点重刷");
+    }
+    return ESP_OK;
 }
 
 /* ---------------- 配置 ---------------- */
@@ -298,6 +415,7 @@ esp_err_t web_server_start(void)
         {.uri = "/favicon.ico", .method = HTTP_GET, .handler = favicon_get},
         {.uri = "/status", .method = HTTP_GET, .handler = status_get},
         {.uri = "/upload", .method = HTTP_POST, .handler = upload_post},
+        {.uri = "/upload/raw", .method = HTTP_POST, .handler = raw_upload_post},
         {.uri = "/config", .method = HTTP_POST, .handler = config_post},
         {.uri = "/config/reset", .method = HTTP_POST, .handler = config_reset_post},
         {.uri = "/reboot", .method = HTTP_POST, .handler = reboot_post},

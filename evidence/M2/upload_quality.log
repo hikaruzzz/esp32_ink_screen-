@@ -1,0 +1,3 @@
+I (122017) wifi:station: 34:6f:24:28:89:6b join, AID=1, bgn, 40UI (214157) wifi:station: 34:6f:24:28:89:6b join, AID=1, bgn, 40U
+I (214217) esp_netif_lwip: DHCP server assigned IP to a client, IP is: 192.168.4.2
+I (214297) wifi:<ba-add>idx:2 (ifx:1, 34:6f:24:28:89:6b), tid:0, ssn:17, winSize:64

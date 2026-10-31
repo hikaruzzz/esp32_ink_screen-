@@ -20,9 +20,6 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-#define EPD_ROW_BYTES (EPD_WIDTH / 4)                  /* 192 */
-#define EPD_FB_BYTES  (EPD_ROW_BYTES * EPD_HEIGHT)     /* 105984 */
-
 #define EPD_SPI_HZ    (8 * 1000 * 1000)
 #define EPD_BUSY_INIT_TIMEOUT_MS   2000
 #define EPD_REFRESH_TIMEOUT_MS     40000
@@ -150,6 +147,11 @@ static bool epd_hw_init(void)
 }
 
 /* ---------- 帧缓冲 ---------- */
+
+uint8_t *epd_framebuffer(void)
+{
+    return s_fb;
+}
 
 void epd_fill(epd_color_t color)
 {
