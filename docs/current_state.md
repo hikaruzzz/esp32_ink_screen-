@@ -317,3 +317,24 @@
   默认饱和度（主机盲测 sat 1.0 略优于 1.25）与颗粒
 - 未采用：上游的行映射公式与理想色板；理由：本机实测行映射正确，理想色板在
   盲测里 dE 反而更高（`evidence/M2/palette_ab/`）
+
+## 修复「点选择照片不弹框」（2026-11-02）
+
+- 观察事实：用户用手机会话点「选择照片」无反应；固件里的页面与源码一致，PAL 之外
+  没有改动，headless Chrome 加载页面无 JS 报错，`<label for="file">` 完整存在
+- 根因假设：原实现 `input[type=file] { display: none; }` + `<label for>` 转发点击，
+  这在微信/手机系统浏览器的 WebView 里常常被拦截（不可见控件不触发选择器）
+- 区分检查：改动后用 headless Chrome 做命中测试，按钮中心点
+  `elementFromPoint` 返回 `INPUT#file`（display=block、opacity=0、pointer-events=auto、
+  209×49），即点击直接落在原生 input 上，不再依赖 label 转发
+- 最小修复（`main/web/index.html`）：
+  - `<input id="file">` 挪进 `<label class="pick">` 内部（去掉 `for`）
+  - 去掉 `display:none`，改为透明铺满按钮：`position:absolute; inset` 由 0 到满、
+    `opacity:0; cursor:pointer`
+  - `.pick` 加 `position:relative; overflow:hidden; margin:0`（顺带修掉 label 默认
+    margin 造成的按钮错位）
+- 验证：内嵌页面 23767 B，二进制内已含新标记；headless 截图按钮排版正常；
+  主机测试 3/3 通过；已烧录 COM4（`epd_photo.bin` 0xef630，余量 52%）
+- 待用户确认：手机刷新页面（页面响应头已是 `Cache-Control: no-store`，仍建议新开
+  标签）后点「选择照片」是否能弹出；若仍不行，请告诉我用的浏览器（微信/系统浏览器/
+  Chrome）与是否走的是 `192.168.4.1`

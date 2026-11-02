@@ -49,7 +49,14 @@
   button.ghost, .pick.ghost {
     background: transparent; color: var(--text); border: 1px solid var(--line);
   }
-  input[type=file] { display: none; }
+  /* 文件选择：输入框不能 display:none，否则部分手机浏览器的 WebView
+     （微信/系统浏览器）不会为 label 触发选择框。改成透明铺满按钮，
+     点击直接落在原生 input 上，兼容性最好。 */
+  .pick { position: relative; overflow: hidden; margin: 0; }
+  .pick input[type=file] {
+    position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+    opacity: 0; font-size: 0; cursor: pointer;
+  }
   .status { display: flex; align-items: center; gap: 8px; font-size: 14px; }
   .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--dim); flex: none; }
   .dot.ok { background: var(--ok); }
@@ -102,10 +109,9 @@
   <canvas id="cv" class="preview" width="768" height="552" style="display:none"></canvas>
 
   <div class="row">
-    <label class="pick" for="file">选择照片</label>
+    <label class="pick">选择照片<input id="file" type="file" accept="image/*"></label>
     <button id="send" disabled>发送到屏幕</button>
   </div>
-  <input id="file" type="file" accept="image/*">
   <div class="meta" id="size"></div>
 </div>
 
