@@ -120,16 +120,16 @@
     <span>画质</span>
     <button class="ghost small" id="qreset">恢复默认</button>
   </div>
-  <div class="qrow"><span>亮度</span><input id="qexpo" type="range" min="0.6" max="2.2" step="0.05" value="1.35"><b id="vexpo">1.35</b></div>
-  <div class="qrow"><span>明暗</span><input id="qgamma" type="range" min="0.7" max="1.8" step="0.02" value="1.10"><b id="vgamma">1.10</b></div>
+  <div class="qrow"><span>亮度</span><input id="qexpo" type="range" min="0.4" max="1.9" step="0.05" value="0.60"><b id="vexpo">0.60</b></div>
+  <div class="qrow"><span>明暗</span><input id="qgamma" type="range" min="0.7" max="1.8" step="0.02" value="1.00"><b id="vgamma">1.00</b></div>
   <div class="qrow"><span>对比度</span><input id="qcon" type="range" min="0.7" max="1.4" step="0.02" value="1.05"><b id="vcon">1.05</b></div>
-  <div class="qrow"><span>饱和度</span><input id="qsat" type="range" min="0" max="1.8" step="0.05" value="1.25"><b id="vsat">1.25</b></div>
+  <div class="qrow"><span>饱和度</span><input id="qsat" type="range" min="0" max="1.8" step="0.05" value="1.15"><b id="vsat">1.15</b></div>
   <div class="qrow"><span>色温</span><input id="qtemp" type="range" min="-1" max="1" step="0.05" value="0"><b id="vtemp">0.00</b></div>
   <div class="qrow"><span>色相</span><input id="qhue" type="range" min="-60" max="60" step="5" value="0"><b id="vhue">0°</b></div>
-  <div class="qrow"><span>颗粒</span><input id="qgrain" type="range" min="1" max="3" step="1" value="2"><b id="vgrain">2×</b></div>
-  <div class="meta">预览实时更新。色温往右偏暖（黄），往左偏冷（蓝）；色相整体转色偏，
-    例如画面发绿就往红的方向转。颗粒 = 抖动色点的大小：1× 最细但浅色区会出现
-    单像素白噪点，2× 连成小块更干净，3× 最干净但细节最糊。
+  <div class="qrow"><span>颗粒</span><input id="qgrain" type="range" min="1" max="3" step="1" value="1"><b id="vgrain">1×</b></div>
+  <div class="meta">默认值按出厂演示图的快照对齐（细颗粒 1×、亮度 0.60）。
+    色温往右偏暖（黄），往左偏冷（蓝）；色相整体转色偏，例如画面发绿就往红的方向转。
+    颗粒 = 抖动色点的大小：1× 最细（和出厂图一致），2× 连成小块更干净，3× 最干净但细节最糊。
     参数全部在手机上算进最终四色帧，设备不用重启。</div>
 </div>
 
@@ -544,9 +544,13 @@ const QSLIDERS = [
   ['qhue', 'vhue', v => `${v.toFixed(0)}°`],
   ['qgrain', 'vgrain', v => `${v.toFixed(0)}×`],
 ];
+/* 默认值对齐出厂演示图（evidence/M2/factory_ref/）：
+   亮度 0.60 把照片白 255 落回面板白 204（线性增益 204/255），不把中间调顶成纯白；
+   gamma/对比度基本不动；颗粒 1× 与出厂图的单像素抖动一致。 */
+const QVER = 2;
 const QDEFAULT = {
-  qexpo: 1.35, qgamma: 1.10, qcon: 1.05, qsat: 1.25, qtemp: 0, qhue: 0,
-  qgrain: 2,
+  qexpo: 0.60, qgamma: 1.00, qcon: 1.05, qsat: 1.15, qtemp: 0, qhue: 0,
+  qgrain: 1,
 };
 
 function syncQLabels() {
@@ -556,7 +560,10 @@ function syncQLabels() {
 }
 
 function saveQuality() {
-  try { localStorage.setItem('epdQuality', JSON.stringify(quality())); } catch (_) {}
+  try {
+    localStorage.setItem('epdQuality',
+      JSON.stringify(Object.assign({ ver: QVER }, quality())));
+  } catch (_) {}
 }
 
 for (const [id] of QSLIDERS) {
@@ -570,15 +577,18 @@ $('qreset').addEventListener('click', () => {
   schedulePreview();
 });
 
-/* 上次调好的参数存在浏览器里，刷新页面不用重调 */
+/* 上次调好的参数存在浏览器里，刷新页面不用重调。
+   版本号变了（默认值重标定）就丢弃旧存档，否则新默认值永远不生效。 */
 try {
   const saved = JSON.parse(localStorage.getItem('epdQuality') || '{}');
   const map = {
     qexpo: 'expo', qgamma: 'gamma', qcon: 'con', qsat: 'sat',
     qtemp: 'temp', qhue: 'hue', qgrain: 'grain',
   };
-  for (const [id, key] of Object.entries(map)) {
-    if (typeof saved[key] === 'number') $(id).value = saved[key];
+  if (saved.ver === QVER) {
+    for (const [id, key] of Object.entries(map)) {
+      if (typeof saved[key] === 'number') $(id).value = saved[key];
+    }
   }
 } catch (_) {}
 

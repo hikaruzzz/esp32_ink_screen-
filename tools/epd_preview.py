@@ -425,10 +425,11 @@ def main() -> int:
                     help="误差扩散强度，0=不下传误差，1=标准 FS")
     ap.add_argument("--fs-jitter", type=float, default=0.0,
                     help="误差扰动幅度（Oklab 单位），用于打散条纹")
-    ap.add_argument("--exposure", type=float, default=1.35)
-    ap.add_argument("--gamma", type=float, default=1.10)
+    ap.add_argument("--exposure", type=float, default=0.60,
+                    help="线性域增益；0.60 = 把照片白 255 落到面板白 204")
+    ap.add_argument("--gamma", type=float, default=1.00)
     ap.add_argument("--contrast", type=float, default=1.05)
-    ap.add_argument("--sat", type=float, default=1.25)
+    ap.add_argument("--sat", type=float, default=1.15)
     ap.add_argument("--temp", type=float, default=0.0,
                     help="色温 -1..1（正=偏暖黄，负=偏冷蓝），仅 fsgm")
     ap.add_argument("--hue", type=float, default=0.0,
