@@ -36,6 +36,7 @@ def js_style_linear(src: np.ndarray, expo: float, gamma: float,
     网页里调色是先量化到 8 位再线性化的，和 epd_preview.tone_map 的纯浮点
     路径差一点点；误差扩散对这点差异很敏感，所以这里必须逐步对齐。
     """
+    expo *= ep.white_gain(src / 255.0)   # 与网页 whiteGain(d) 同一条规则
     i = np.arange(256) / 255.0
     s = ep.lin_to_srgb(ep.srgb_to_lin(i) * expo)
     s = np.clip(0.5 + (s - 0.5) * con, 0.0, 1.0) ** (1.0 / gamma)
@@ -62,7 +63,7 @@ def main() -> int:
     rgb = ep.cover_crop(Image.open(args.image))          # 0..1 sRGB, 768x552
     src = (np.clip(rgb, 0, 1) * 255).round().astype(np.uint8)
 
-    lin = js_style_linear(src, 1.35, 1.10, 1.05, 1.25)
+    lin = js_style_linear(src, 0.60, 1.00, 1.05, 1.15)
     idx_py = ep.algo_fs_gm_lin(lin, 1.0, grain=args.grain)
     fb_py = pack_fb(idx_py)
 

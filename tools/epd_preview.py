@@ -148,6 +148,25 @@ def cover_crop(img: Image.Image) -> np.ndarray:
     return np.asarray(img, dtype=np.float64) / 255.0
 
 
+def white_gain(rgb: np.ndarray) -> float:
+    """自动白点增益：把这张图的白（亮度 99.5 分位）对齐到面板白。
+
+    与 index.html 的 whiteGain() 同一条规则、同一套整数运算（先量化到
+    8 位再统计），否则跨端一致性检查会因为分位点差 1 而整帧发散。
+    """
+    src = (np.clip(rgb, 0.0, 1.0) * 255).round().astype(np.int64)
+    y = (299 * src[..., 0] + 587 * src[..., 1] + 114 * src[..., 2] + 500) // 1000
+    hist = np.bincount(y.ravel(), minlength=256)
+    need = max(1, int(y.size * 0.005))
+    acc, wp = 0, 255
+    for i in range(255, -1, -1):
+        acc += int(hist[i])
+        if acc >= need:
+            wp = i
+            break
+    return min(2.4, max(1.0, 1.0 / max(float(srgb_to_lin(np.array(wp / 255.0))), 1e-4)))
+
+
 def tone_map(rgb: np.ndarray, exposure: float, gamma: float,
              contrast: float, sat: float) -> np.ndarray:
     """返回 sRGB 域的调色结果（0..1）。"""
@@ -427,6 +446,8 @@ def main() -> int:
                     help="误差扰动幅度（Oklab 单位），用于打散条纹")
     ap.add_argument("--exposure", type=float, default=0.60,
                     help="线性域增益；0.60 = 把照片白 255 落到面板白 204")
+    ap.add_argument("--no-auto-white", action="store_true",
+                    help="关掉自动白点（默认按亮度 99.5 分位把图的白位对齐到面板白）")
     ap.add_argument("--gamma", type=float, default=1.00)
     ap.add_argument("--contrast", type=float, default=1.05)
     ap.add_argument("--sat", type=float, default=1.15)
@@ -445,6 +466,12 @@ def main() -> int:
 
     img = Image.open(args.image)
     rgb = cover_crop(img)
+
+    if not args.no_auto_white:
+        wg = white_gain(rgb)
+        if wg > 1.005:
+            print(f"自动白点 ×{wg:.2f} -> 有效曝光 {args.exposure * wg:.2f}")
+            args.exposure *= wg
 
     if args.algo == "bayer4":
         idx = algo_bayer4(rgb, noise_mask(rgb.shape[:2], "bayer4"))

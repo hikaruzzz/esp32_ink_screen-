@@ -92,10 +92,10 @@ vm.runInContext(m[1], sandbox, { filename: 'index.html:script' });
 
 /* 画质滑块用默认值，和 Python 参考实现保持一致 */
 vm.runInContext(`
-  document.getElementById('qexpo').value = 1.35;
-  document.getElementById('qgamma').value = 1.10;
+  document.getElementById('qexpo').value = 0.60;
+  document.getElementById('qgamma').value = 1.00;
   document.getElementById('qcon').value = 1.05;
-  document.getElementById('qsat').value = 1.25;
+  document.getElementById('qsat').value = 1.15;
   document.getElementById('qtemp').value = 0;
   document.getElementById('qhue').value = 0;
   document.getElementById('qgrain').value = ${grain};
