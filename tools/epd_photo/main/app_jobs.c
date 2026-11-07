@@ -22,7 +22,9 @@ static const char *TAG = "jobs";
 typedef enum {
     JOB_REFRESH = 0,
     JOB_DECODE,      /* 解码 photo 分区里的照片 */
-    JOB_TOGGLE_WIFI,
+    JOB_TOGGLE_WIFI, /* 单击：开关热点 */
+    JOB_TOGGLE_INFO, /* 双击：照片 ↔ 信息页 */
+    JOB_SHOW_INFO,   /* 开机无照片：显示信息页 */
 } job_type_t;
 
 typedef struct {
@@ -35,6 +37,9 @@ static char s_state[16];
 static char s_msg[96];
 static int s_src_w;
 static int s_src_h;
+
+/* 帧缓冲里现在装的是不是热点信息页。只由 display 任务读写。 */
+static bool s_info_page;
 
 static void set_status(const char *state, const char *msg)
 {
@@ -80,14 +85,16 @@ static esp_err_t queue_push(job_t job)
         return ESP_OK;
     }
 
-    /* 队列只有 1 格且已被占用：解码作业可以被后来的替换掉
-     * （反正后一张才是用户要的）；其它作业直接失败，调用者稍后重试即可。 */
-    if (job.type != JOB_DECODE) {
+    /* 队列只有 1 格且已被占用（display 任务正在刷屏，约 15 s）：
+     *   - 重刷随时可以丢，调用者重试即可；
+     *   - 其它作业把排队的那一格换成新的 —— 后一下按键、后一张图才是用户要的。
+     * 这样刷屏期间双击看热点信息不会被丢掉。 */
+    if (job.type == JOB_REFRESH) {
         return ESP_ERR_INVALID_STATE;
     }
     job_t old;
     if (xQueueReceive(s_queue, &old, 0) == pdTRUE) {
-        (void)old;
+        ESP_LOGI(TAG, "队列已满，丢弃作业 %d，改为 %d", (int)old.type, (int)job.type);
     }
     return (xQueueSend(s_queue, &job, 0) == pdTRUE) ? ESP_OK : ESP_FAIL;
 }
@@ -116,6 +123,24 @@ esp_err_t app_jobs_submit_toggle_wifi(void)
         return ESP_ERR_INVALID_STATE;
     }
     const job_t job = {.type = JOB_TOGGLE_WIFI};
+    return queue_push(job);
+}
+
+esp_err_t app_jobs_submit_toggle_info(void)
+{
+    if (s_queue == NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    const job_t job = {.type = JOB_TOGGLE_INFO};
+    return queue_push(job);
+}
+
+esp_err_t app_jobs_submit_show_info(void)
+{
+    if (s_queue == NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    const job_t job = {.type = JOB_SHOW_INFO};
     return queue_push(job);
 }
 
@@ -207,11 +232,13 @@ static void display_task(void *arg)
 
         case JOB_DECODE:
             if (decode_stored_photo() == ESP_OK) {
+                s_info_page = false;
                 refresh_with_status("完成");
             }
             break;
 
         case JOB_TOGGLE_WIFI: {
+            /* 单击只切热点。屏幕上是照片时画面保持不动 —— 用户要的是相框。 */
             const bool want_on = !wifi_ap_is_enabled();
             const esp_err_t err = wifi_ap_set_enabled(want_on);
             if (err != ESP_OK) {
@@ -220,24 +247,45 @@ static void display_task(void *arg)
                 break;
             }
 
-            if (want_on) {
-                screen_draw_wifi_status(app_config_get(), true);
-                refresh_with_status("热点已打开");
+            ESP_LOGI(TAG, "热点已%s%s", want_on ? "打开" : "关闭",
+                     s_info_page ? "，刷新信息页" : "，屏幕保持照片");
+            if (!s_info_page) {
+                set_status("idle", want_on ? "热点已打开" : "热点已关闭");
                 break;
             }
 
-            /* 关热点 = 回到相框模式：把分区里的照片重新解码刷屏。
-             * 帧缓冲已被状态页覆盖，不能直接重刷。 */
-            if (decode_stored_photo() == ESP_OK) {
-                refresh_with_status("热点已关闭，显示照片");
-                break;
-            }
-
-            /* 没有照片（或读不出来）：退回原来的状态页兜底 */
-            screen_draw_wifi_status(app_config_get(), false);
-            refresh_with_status("还没有照片，请先上传一张");
+            screen_draw_wifi_status(app_config_get(), want_on);
+            refresh_with_status(want_on ? "热点已打开" : "热点已关闭");
             break;
         }
+
+        case JOB_TOGGLE_INFO:
+            if (!s_info_page) {
+                s_info_page = true;
+                screen_draw_wifi_status(app_config_get(), wifi_ap_is_enabled());
+                refresh_with_status("热点信息");
+                break;
+            }
+
+            /* 从信息页回到照片 */
+            if (decode_stored_photo() == ESP_OK) {
+                s_info_page = false;
+                refresh_with_status("完成");
+                break;
+            }
+
+            /* 没有照片（或读不出来）：把信息页画回帧缓冲，屏幕本来就还是它 */
+            screen_draw_wifi_status(app_config_get(), wifi_ap_is_enabled());
+            set_status("error", "还没有照片，请先上传一张");
+            break;
+
+        case JOB_SHOW_INFO:
+            if (!s_info_page) {
+                s_info_page = true;
+                screen_draw_wifi_status(app_config_get(), wifi_ap_is_enabled());
+                refresh_with_status("还没有照片，请先上传一张");
+            }
+            break;
 
         default:
             break;

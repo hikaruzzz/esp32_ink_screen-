@@ -23,6 +23,7 @@
 #define EPD_SPI_HZ    (8 * 1000 * 1000)
 #define EPD_BUSY_INIT_TIMEOUT_MS   2000
 #define EPD_REFRESH_TIMEOUT_MS     40000
+#define EPD_REFRESH_START_TIMEOUT_MS 300 /* 0x12 之后多久内应看到 BUSY 拉低 */
 #define EPD_REFRESH_PASSES         1
 #define EPD_POWEROFF_TIMEOUT_MS    5000
 
@@ -116,6 +117,22 @@ static bool epd_wait_busy(uint32_t timeout_ms)
             return false;
         }
         vTaskDelay(pdMS_TO_TICKS(50));
+    }
+    return true;
+}
+
+/* 等刷新真正开始：0x12 之后面板会拉低 BUSY 约 15 s。
+ * 实测（2026-11-08）出现过一次 BUSY 一直为高、epd_wait_busy 20 ms 后
+ * 就判定“刷完了”（64 ms）的情况；随后立刻 Power Off 会把刷新掐断，
+ * 屏幕停在上一个画面。先确认看到 BUSY 拉低，再等它变高。 */
+static bool epd_wait_refresh_start(uint32_t timeout_ms)
+{
+    const int64_t start = esp_timer_get_time();
+    while (gpio_get_level(EPD_PIN_BUSY) != 0) {
+        if ((esp_timer_get_time() - start) > (int64_t)timeout_ms * 1000) {
+            return false;
+        }
+        vTaskDelay(pdMS_TO_TICKS(5));
     }
     return true;
 }
@@ -255,6 +272,18 @@ esp_err_t epd_display(void)
     for (int pass = 0; pass < EPD_REFRESH_PASSES; ++pass) {
         epd_write_cmd(0x12);
         epd_write_data(&on, 1);
+
+        /* 先确认刷新真的开始了，避免把“面板没理这条命令”当成 64 ms 刷完了 */
+        if (!epd_wait_refresh_start(EPD_REFRESH_START_TIMEOUT_MS)) {
+            ESP_LOGW(TAG, "refresh pass %d/%d 未启动，重发 0x12", pass + 1, EPD_REFRESH_PASSES);
+            epd_write_cmd(0x12);
+            epd_write_data(&on, 1);
+            if (!epd_wait_refresh_start(EPD_REFRESH_START_TIMEOUT_MS)) {
+                ESP_LOGE(TAG, "refresh pass %d/%d 仍未启动，放弃", pass + 1, EPD_REFRESH_PASSES);
+                refreshed = false;
+                break;
+            }
+        }
 
         const int64_t t0 = esp_timer_get_time();
         refreshed = epd_wait_busy(EPD_REFRESH_TIMEOUT_MS);

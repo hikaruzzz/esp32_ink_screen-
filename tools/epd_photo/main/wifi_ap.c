@@ -62,11 +62,10 @@ esp_err_t wifi_ap_init(const char *ssid, const char *password)
         return err;
     }
 
-    /* 配置留在驱动里，射频保持关闭；wifi_ap_set_enabled(true) 时才
-     * esp_wifi_start()，热点名和密码不用重设。 */
+    /* 配置留在驱动里，射频先不开；调用方决定什么时候 esp_wifi_start()
+     * （相框现在开机就打开），热点名和密码不用重设。 */
     s_ap_on = false;
-    ESP_LOGI(TAG, "热点已配置但未启动：SSID=\"%s\" 加密方式=%s（按 BOOT 打开）",
-             ssid, use_wpa2 ? "WPA2" : "开放");
+    ESP_LOGI(TAG, "热点已配置：SSID=\"%s\" 加密方式=%s", ssid, use_wpa2 ? "WPA2" : "开放");
     return ESP_OK;
 }
 

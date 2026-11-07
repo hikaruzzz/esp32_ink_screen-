@@ -1,0 +1,37 @@
+I (179) esp_image: segment 3: paddr=000ea4ec vaddr=3fc96224 sizeI (36543) button: 短按 200 ms，等第二下
+I (37003) button: 单击
+I (37003) epd_photo: BOOT 键单击：切换热点
+I (37003) wifi:station: 32:5e:98:52:36:52 leave, AID = 1, reason = 2, bss_flags is 756835, bss:0x3fcb846c
+I (37003) wifi:new:<6,0>, old:<6,1>, ap:<6,1>, sta:<255,255>, prof:6, snd_ch_cfg:0x0
+I (37003) wifi:<ba-del>idx:2, tid:0
+I (37003) wifi:new:<6,1>, old:<6,0>, ap:<6,1>, sta:<255,255>, prof:6, snd_ch_cfg:0x0
+W (37003) httpd_txrx: httpd_sock_err: error in recv : 113
+I (37073) wifi:flush txq
+I (37073) wifi:stop sw txq
+I (37073) wifi:lmac stop hw txq
+I (37073) wifi_ap: 热点已关闭
+I (37073) jobs: 热点已关闭，屏幕保持照片
+I (37643) button: 短按 130 ms，等第二下
+I (38103) button: 单击
+I (38103) epd_photo: BOOT 键单击：切换热点
+I (38103) wifi:mode : softAP (48:f6:ee:15:78:c9)
+I (38103) wifi:Total power save buffer number: 16
+I (38103) wifi:Init max length of beacon: 752/752
+I (38103) wifi:Init max length of beacon: 752/752
+I (38103) esp_netif_lwip: DHCP server started on interface WIFI_AP_DEF with IP: 192.168.4.1
+I (38103) wifi_ap: 热点已打开
+I (38103) jobs: 热点已打开，屏幕保持照片
+I (38923) button: 短按 170 ms，等第二下
+I (39193) button: 双击（间隔 270 ms）
+I (39193) epd_photo: BOOT 键双击：切换热点信息页
+I (39363) epd: hw init: ready(reset)=1 ready(power-on)=1
+I (39363) epd: row 0/552 -> y=0
+I (39383) epd: row 100/552 -> y=200
+I (39413) epd: row 200/552 -> y=400
+I (39443) epd: row 300/552 -> y=1
+I (39473) epd: row 400/552 -> y=201
+I (39503) epd: row 500/552 -> y=401
+I (39563) wifi:station: 32:5e:98:52:36:52 join, AID=1, bgn, 40U
+I (39583) epd: refresh pass 1/1 done in 64 ms
+I (39603) jobs: 刷屏完成，剩余堆 83836 B
+I (39643) wifi:<ba-add>idx:2 (ifx:1, 32:5e:98:52:36:52), tid:0, ssn:888, winSize:64

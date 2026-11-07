@@ -73,11 +73,12 @@ void screen_draw_wifi_status(const app_config_t *cfg, bool ap_on)
 
         draw_centered("http://192.168.4.1", 320, 3, EPD_BLACK);
         draw_centered("Open it in your phone browser", 375, 2, EPD_BLACK);
-        draw_centered_fit("Press BOOT to turn Wi-Fi off", 470, 2, EPD_RED);
+        draw_centered("Double-click BOOT: back to photo", 440, 2, EPD_BLACK);
+        draw_centered("Single click BOOT: Wi-Fi on/off", 480, 2, EPD_RED);
     } else {
-        draw_centered("Wi-Fi is off, photo page", 180, 3, EPD_BLACK);
-        draw_centered("is not reachable now", 225, 3, EPD_BLACK);
-        draw_centered_fit("Press BOOT to turn Wi-Fi on", 330, 3, EPD_RED);
-        draw_centered("Last image stays on screen", 450, 2, EPD_BLACK);
+        draw_centered("Wi-Fi is off", 180, 3, EPD_BLACK);
+        draw_centered("Single click BOOT: turn Wi-Fi on", 240, 2, EPD_RED);
+        draw_centered("Double-click BOOT: back to photo", 290, 2, EPD_BLACK);
+        draw_centered("Photos still show without Wi-Fi", 380, 2, EPD_BLACK);
     }
 }

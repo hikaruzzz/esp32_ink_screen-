@@ -4,7 +4,7 @@
 
 #include "esp_err.h"
 
-/* 以 AP 模式初始化并配置热点，但射频保持关闭（上电默认不开热点）。
+/* 以 AP 模式初始化并配置热点，射频暂不开（由调用方 wifi_ap_set_enabled 打开）。
  * 密码少于 8 位时使用开放网络。 */
 esp_err_t wifi_ap_init(const char *ssid, const char *password);
 

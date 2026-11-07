@@ -77,8 +77,9 @@
 > 下面的 JPEG 解码路径仍然保留，作为脚本/兼容入口。
 
 - 位置：`tools/epd_photo/`（独立工程，`idf.py -C tools/epd_photo build`）
-- 功能：开机建 SoftAP 热点 → 手机连上后打开 `http://192.168.4.1` 选图上传 →
-  设备解码成四色并刷屏；BOOT 键短按切换热点开关，热点打开时屏幕上显示 SSID 与密码
+- 功能：开机即打开 SoftAP 热点并像画框一样显示上次的照片 → 手机连上后打开
+  `http://192.168.4.1` 选图上传 → 设备解码成四色并刷屏；BOOT **单击**开关热点
+  （画面不动），**双击**在照片与热点信息页之间切换
 - 配置：`main/app_config_local.h`（编译期默认值，已 gitignore，模板见 `.example`）+ NVS；
   网页“高级设置”也能改，重启后生效；`POST /config/reset` 恢复默认
 - 代码结构：
@@ -88,9 +89,9 @@
   - `image_decode.c` tjpgd 逐 MCU 解码 → cover 裁切 → 交给 `image_pipeline.c` 量化
   - `image_pipeline.c/h` 四色量化：色调 LUT（曝光/对比度/gamma）→ 线性光下投影到
     四色凸包最合适的边 → 按蓝噪声阈值选两色之一；参数由网页画质滑块下发
-  - `app_jobs.c` 显示队列：重刷 / 上传解码 / 切换热点全部串行，独占面板与 SPI
+  - `app_jobs.c` 显示队列：重刷 / 上传解码 / 切热点 / 切信息页全部串行，独占面板与 SPI
   - `web_server.c` HTTP：`GET /`、`GET /status`、`POST /upload`(裸 JPEG)、`/config`、`/config/reset`、`/reboot`
-  - `wifi_ap.c` AP 启停；`button.c` BOOT 键短按（GPIO9）
+  - `wifi_ap.c` AP 启停；`button.c` BOOT 键单击/双击（GPIO9）
   - `main/web/index.html` 被 EMBED_TXTFILES 内嵌；浏览器端 cover 裁切 + 四色预览 + 压到 40 KB 以内
 - 关键约束：
   - C3 的 ROM 带 TJpgDec，但 ROM 版 `jd_decomp` 多一个 format 参数且不导出 `tjpgd.h`；
@@ -445,3 +446,47 @@
   - 明细与脚本：`docs/calibration.md`、`evidence/M2/colorcheck/`
     （`card_compare.png`、`patches_report.txt`、`sweep*.py`、`guard_eval.py`）
 - 代码未改（`git status` 只有证据文件）；因此不需要重编译/烧录。
+
+## 开机即开热点 + 双击看 Wi-Fi 信息（2026-11-08）
+
+用户要求：「开机默认 wifi 打开，快速双击 root 键则显示 wifi 信息，否则无论 wifi
+打开关闭都仍显示图片而不是 wifi 信息」。
+
+- 行为（固件现在就是这样）：
+  | 操作 | 热点 | 屏幕 |
+  |------|------|------|
+  | 开机 | **打开** | 上次的照片（没有照片时显示热点信息页） |
+  | BOOT 单击 | 开 ↔ 关 | **不变**，还是照片 |
+  | BOOT 双击 | 不变 | 照片 ↔ 热点信息页 |
+  | 手机上传完成 | 不变 | 新照片 |
+- 改动：
+  - `epd_photo.c`：`wifi_ap_init()` 之后立刻 `wifi_ap_set_enabled(true)`（此时
+    显示任务还没创建，无并发）；打开失败只记日志，不阻止相框启动；开机用
+    `app_jobs_submit_show_info()` 代替在 main 里直接画页
+  - `button.c/h`：`button_init(on_click, on_double_click)`。两次短按的**松开间隔**
+    ≤450 ms 判为双击，第二下松开时立即回调；单击要等 450 ms 窗口过去才回调
+    （最多晚 0.45 s）。长按 >2500 ms 仍忽略
+  - `app_jobs.c/h`：新增 `JOB_TOGGLE_INFO`（双击）与 `JOB_SHOW_INFO`（开机无照片），
+    新增 `s_info_page` 记录「帧缓冲里现在是信息页」。`JOB_TOGGLE_WIFI` 只在
+    信息页上时重绘，照片模式只切射频不动画面。队列满时除 `JOB_REFRESH` 外
+    **新作业顶掉排队那个**，这样 15 s 刷屏期间双击不会被丢
+  - `screen_ui.c`：两种状态的按键提示改成「Single click BOOT: Wi-Fi on/off」
+    「Double-click BOOT: back to photo」
+  - `epd_se0398nz07.c`：读日志发现一次 `refresh pass 1/1 done in 64 ms`
+    （正常 15064 ms，历史日志 20 次里只有这一次）。0x12 之后面板还没拉低
+    BUSY，`epd_wait_busy` 20 ms 后就判定刷完了，紧接着 `0x02` 断电会把刷新
+    掐断。新增 `epd_wait_refresh_start()`：先最多等 300 ms 看到 BUSY 拉低，
+    没看到就补发一次 0x12，再不行报错而不是假装成功
+- 验证（COM4，`evidence/M2/boot_wifi_on.log`）：
+  `I (513) wifi_ap: 热点已配置` → `I (563) 热点已打开` →
+  `I (563) epd_photo: 上电显示分区里的照片（105984 B）` → 刷屏 15064 ms →
+  `jobs: 刷屏完成`；手机在 t=8.5 s 自动连上（`station ... join`），证明热点
+  开机就在广播
+- 实机按键（`evidence/M2/boot_wifi_on_doubleclick.log`，用户当时在按）：
+  单击 → `热点已关闭，屏幕保持照片`；单击 → `热点已打开，屏幕保持照片`；
+  双击（间隔 270 ms）→ `BOOT 键双击：切换热点信息页`
+- 构建/烧录：`epd_photo.bin` 0xf04e0（余量 52%），已烧录 COM4
+- 待用户确认：
+  - 双击后信息页**真的出现在屏上**（那次 64 ms 的刷新已被上面的守卫兜住，
+    但还没在实机上再复现一次双击）
+  - 单击改热点时屏幕不动是否符合预期（这是按「否则仍显示图片」推出来的语义）
