@@ -490,3 +490,12 @@
   - 双击后信息页**真的出现在屏上**（那次 64 ms 的刷新已被上面的守卫兜住，
     但还没在实机上再复现一次双击）
   - 单击改热点时屏幕不动是否符合预期（这是按「否则仍显示图片」推出来的语义）
+
+## 发布到 GitHub（2026-11-08）
+
+- 远端：`origin` = `git@github.com:hikaruzzz/esp32_ink_screen-.git`（SSH，空仓库）
+- 首次推送 `main`：`d7b3d20`（含历史 6 个提交），工作区已跟踪文件 231 → 283
+- 推送前扫描：无 API key / token / 私钥；`app_config_local.h`（含热点凭据）
+  与 `build/`、`sdkconfig` 仍由 `.gitignore` 排除，只入库 `.example`
+- 注意：`evidence/M2/color_audit/` 下的 `report.txt` 与 `*.log` 会随
+  `tools/audit_epd_color.py` 重新生成，跑一次就会产生未提交改动
