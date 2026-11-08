@@ -102,7 +102,7 @@
 <body>
 
 <h1>墨水屏相框</h1>
-<div class="sub">选择一张照片，浏览器直接算出黑/白/黄/红四色画面再发给设备，屏幕所见即所得。</div>
+<div class="sub">选择一张照片，浏览器直接算出黑/白/黄/红四色画面再发给设备。预览为近似模拟，实屏观感受光照和面板影响。</div>
 
 <div class="card">
   <div id="ph" class="ph">还没有选择图片</div>
@@ -122,7 +122,7 @@
   </div>
   <div class="qrow"><span>亮度</span><input id="qexpo" type="range" min="0.4" max="1.9" step="0.05" value="0.60"><b id="vexpo">0.60</b></div>
   <div class="qrow"><span>明暗</span><input id="qgamma" type="range" min="0.7" max="1.8" step="0.02" value="1.00"><b id="vgamma">1.00</b></div>
-  <div class="qrow"><span>对比度</span><input id="qcon" type="range" min="0.7" max="1.4" step="0.02" value="1.05"><b id="vcon">1.05</b></div>
+  <div class="qrow"><span>对比度</span><input id="qcon" type="range" min="0.7" max="1.4" step="0.01" value="1.05"><b id="vcon">1.05</b></div>
   <div class="qrow"><span>饱和度</span><input id="qsat" type="range" min="0" max="1.8" step="0.05" value="1.15"><b id="vsat">1.15</b></div>
   <div class="qrow"><span>色温</span><input id="qtemp" type="range" min="-1" max="1" step="0.05" value="0"><b id="vtemp">0.00</b></div>
   <div class="qrow"><span>色相</span><input id="qhue" type="range" min="-60" max="60" step="5" value="0"><b id="vhue">0°</b></div>
@@ -186,7 +186,7 @@ const linToSrgb = v => {
 const LIN = new Float32Array(256);
 for (let i = 0; i < 256; i++) LIN[i] = srgbToLin(i / 255);
 
-/* ---------- Oklab：色域映射与误差扩散都在这个空间里算 ----------
+/* ---------- Oklab 用于色域映射；墨点面积的误差在线性光中扩散 ----------
  * 线性 RGB 里蓝色亮度极低，直接投影会被判成很暗的灰；Oklab 把亮度
  * 和色度分开，印不出来的蓝/绿只丢色度、保留明暗。 */
 function linToOklab(r, g, b, out) {
@@ -198,7 +198,66 @@ function linToOklab(r, g, b, out) {
   out[2] = 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s;
 }
 
-/* 四色在 Oklab 里的坐标，以及凸包六条边（沿边混合 = 两种色料按比例叠加） */
+function oklabToLin(l, a, b, out) {
+  const ll = Math.pow(l + 0.3963377774 * a + 0.2158037573 * b, 3);
+  const mm = Math.pow(l - 0.1055613458 * a - 0.0638541728 * b, 3);
+  const ss = Math.pow(l - 0.0894841775 * a - 1.2914855480 * b, 3);
+  out[0] = 4.0767416621 * ll - 3.3077115913 * mm + 0.2309699292 * ss;
+  out[1] = -1.2684380046 * ll + 2.6097574011 * mm - 0.3413193965 * ss;
+  out[2] = -0.0041960863 * ll - 0.7034186147 * mm + 1.7076147010 * ss;
+}
+
+const PAL_LIN = PAL.map(c => c.map(v => srgbToLin(v / 255)));
+const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const sub3 = (a, b) => a.map((v, i) => v - b[i]);
+const cross3 = (a, b) => [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];
+
+/* 真实可混色域是线性 RGB 中的四面体，包含面和内部，不能只认六条边。 */
+const PHYSICAL = (() => {
+  const p = PAL_LIN, u = sub3(p[1], p[0]), v = sub3(p[2], p[0]), w = sub3(p[3], p[0]);
+  const det = dot3(u, cross3(v, w));
+  const inv = [cross3(v, w), cross3(w, u), cross3(u, v)].map(r => r.map(x => x / det));
+  const faces = [[0,1,2], [0,1,3], [0,2,3], [1,2,3]].map(ids => {
+    const base = p[ids[0]], a = sub3(p[ids[1]], base), b = sub3(p[ids[2]], base);
+    const aa = dot3(a, a), ab = dot3(a, b), bb = dot3(b, b);
+    return { base, a, b, aa, ab, bb, inv: 1 / (aa * bb - ab * ab) };
+  });
+  const edges = [];
+  for (let i = 0; i < 4; i++) for (let j = i + 1; j < 4; j++) {
+    const d = sub3(p[j], p[i]);
+    edges.push({ base: p[i], d, inv: 1 / dot3(d, d) });
+  }
+  return { inv, faces, edges };
+})();
+
+function physicalInside(c) {
+  const d = sub3(c, PAL_LIN[0]);
+  const w = PHYSICAL.inv.map(r => dot3(r, d));
+  return w.every(v => v >= -1e-6) && w[0] + w[1] + w[2] <= 1 + 1e-6;
+}
+
+/* 将感知映射结果收回真实线性凸包，防止不可达残差持续积累。 */
+function physicalProject(c, out) {
+  if (physicalInside(c)) { out[0] = c[0]; out[1] = c[1]; out[2] = c[2]; return; }
+  let best = Infinity;
+  function take(p) {
+    const d = sub3(c, p), err = dot3(d, d);
+    if (err < best) { best = err; out[0] = p[0]; out[1] = p[1]; out[2] = p[2]; }
+  }
+  for (const f of PHYSICAL.faces) {
+    const d = sub3(c, f.base), da = dot3(d, f.a), db = dot3(d, f.b);
+    const u = (da * f.bb - db * f.ab) * f.inv;
+    const v = (db * f.aa - da * f.ab) * f.inv;
+    if (u >= 0 && v >= 0 && u + v <= 1) take(f.base.map((x, i) => x + u*f.a[i] + v*f.b[i]));
+  }
+  for (const e of PHYSICAL.edges) {
+    const t = Math.max(0, Math.min(1, dot3(sub3(c, e.base), e.d) * e.inv));
+    take(e.base.map((x, i) => x + t * e.d[i]));
+  }
+}
+
+/* 四色的 Oklab 坐标与六条感知线段，仅用于域外色的近似映射。
+ * Oklab 线段不是按墨点面积混合的轨迹，不能直接拿来扩散误差。 */
 const OK = (() => {
   const pal = PAL.map(c => {
     const o = [0, 0, 0];
@@ -277,8 +336,8 @@ function coverParams(iw, ih) {
 /* ---------- 核心：生成最终 2bpp 帧（预览与上传是同一份数据） ----------
  *   1. cover 裁切到 768x552
  *   2. 饱和度 + 曝光/对比度/gamma（toneLUT）
- *   3. 转到 Oklab，投影到四色凸包（丢弃印不出的色度）
- *   4. Floyd–Steinberg 误差扩散，蛇形扫描
+ *   3. 保留真实色域内的颜色；域外用 Oklab 六边近似，再收回真实凸包
+ *   4. 线性光 Floyd–Steinberg 误差扩散，蛇形扫描
  *   5. 打包成 2bpp（每字节 4 像素，左侧像素在高位）
  * 返回耗时（秒）；结果放在 packedFrame 里。 */
 let packedFrame = null;
@@ -311,8 +370,10 @@ function renderFinal() {
   const gw = W / g, gh = H / g;          /* 768、552 都能被 1/2/3 整除 */
   const N = gw * gh;
   const L = new Float64Array(N), A = new Float64Array(N), B = new Float64Array(N);
-  const pal = OK.pal, edges = OK.edges;
+  // L/A/B 是沿用的缓冲名，此后存储线性 R/G/B，而非 Oklab。
+  const pal = PAL_LIN, edges = OK.edges;
   const lab = [0, 0, 0];
+  const linear = [0, 0, 0], feasible = [0, 0, 0];
 
   /* 色温 / 色相只在 Oklab 的色度平面上动：
    *   色相 = 旋转 (a,b)，亮度 L 不变；
@@ -322,8 +383,13 @@ function renderFinal() {
   const dTemp = q.temp * 0.06;
   const adjust = (q.hue !== 0 || q.temp !== 0);
 
-  /* 投影到四色凸包的最近点，结果写进 L/A/B[i] */
+  /* Oklab 只决定域外颜色的感知目标；输出必须是可由墨点面积混成的线性光。 */
   function gamutTo(i) {
+    oklabToLin(lab[0], lab[1], lab[2], linear);
+    if (physicalInside(linear)) {
+      L[i] = linear[0]; A[i] = linear[1]; B[i] = linear[2];
+      return;
+    }
     let bestErr = Infinity, bl = 0, ba = 0, bb = 0;
     for (let e = 0; e < 6; e++) {
       const ed = edges[e], p = ed.p, dv = ed.d;
@@ -335,7 +401,9 @@ function renderFinal() {
       const err = dl * dl + da * da + db * db;
       if (err < bestErr) { bestErr = err; bl = pl; ba = pa; bb = pb; }
     }
-    L[i] = bl; A[i] = ba; B[i] = bb;
+    oklabToLin(bl, ba, bb, linear);
+    physicalProject(linear, feasible);
+    L[i] = feasible[0]; A[i] = feasible[1]; B[i] = feasible[2];
   }
 
   if (g === 1) {
@@ -383,7 +451,6 @@ function renderFinal() {
   }
 
   /* 误差扩散：cur = 本行要加的误差，nxt = 下一行；每行换方向减少条纹 */
-  const CLAMP_ERR = 0.25;
   const codes = new Uint8Array(N);
   let curL = new Float64Array(gw), curA = new Float64Array(gw), curB = new Float64Array(gw);
   let nxtL = new Float64Array(gw), nxtA = new Float64Array(gw), nxtB = new Float64Array(gw);
@@ -403,9 +470,7 @@ function renderFinal() {
       codes[i] = k;
 
       let er = l - pal[k][0], ea = a - pal[k][1], eb = b - pal[k][2];
-      er = er > CLAMP_ERR ? CLAMP_ERR : (er < -CLAMP_ERR ? -CLAMP_ERR : er);
-      ea = ea > CLAMP_ERR ? CLAMP_ERR : (ea < -CLAMP_ERR ? -CLAMP_ERR : ea);
-      eb = eb > CLAMP_ERR ? CLAMP_ERR : (eb < -CLAMP_ERR ? -CLAMP_ERR : eb);
+      // 目标已在真实凸包内；不要截断误差，否则墨点面积不再守恒。
 
       const xf = x + step, xl = x - step;
       if (xf >= 0 && xf < gw) {
@@ -443,7 +508,7 @@ function renderFinal() {
     }
   }
 
-  /* 预览直接由打包结果还原，保证看到的就是屏幕上的 */
+  /* 预览和上传使用相同色码；PAL 是面板在参考光照下的近似颜色。 */
   for (let y = 0; y < H; y++) {
     const row = y * ROW_BYTES;
     for (let x = 0; x < W; x++) {
@@ -579,9 +644,9 @@ const QSLIDERS = [
   ['qgrain', 'vgrain', v => `${v.toFixed(0)}×`],
 ];
 /* 默认值对齐出厂演示图（evidence/M2/factory_ref/）：
-   亮度 0.60 把照片白 255 落回面板白 204（线性增益 204/255），不把中间调顶成纯白；
+   亮度 0.60 把照片白 255 落回面板白 204（线性增益约 (204/255)^2.4），不把中间调顶成纯白；
    gamma/对比度基本不动；颗粒 1× 与出厂图的单像素抖动一致。 */
-const QVER = 2;
+const QVER = 3;
 const QDEFAULT = {
   qexpo: 0.60, qgamma: 1.00, qcon: 1.05, qsat: 1.15, qtemp: 0, qhue: 0,
   qgrain: 1,

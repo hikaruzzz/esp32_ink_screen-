@@ -11,12 +11,13 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const [srcPath, outPath, grainArg] = process.argv.slice(2);
+const [srcPath, outPath, grainArg, qualityPath] = process.argv.slice(2);
 if (!srcPath || !outPath) {
-  console.error('用法: node fb_crosscheck.js <src.rgb> <out.2bpp> [grain]');
+  console.error('用法: node fb_crosscheck.js <src.rgb> <out.2bpp> [grain] [quality.json]');
   process.exit(2);
 }
 const grain = grainArg ? Number(grainArg) : 1;
+const overrides = qualityPath ? JSON.parse(fs.readFileSync(qualityPath, 'utf8')) : {};
 
 const W = 768, H = 552;
 const raw = fs.readFileSync(srcPath);
@@ -101,6 +102,17 @@ vm.runInContext(`
   document.getElementById('qgrain').value = ${grain};
   bitmap = { width: 768, height: 552 };
 `, sandbox);
+
+// 诊断可用中性调色参数隔离量化误差，默认行为不变。
+for (const key of ['expo', 'gamma', 'con', 'sat', 'temp', 'hue']) {
+  if (Object.hasOwn(overrides, key)) {
+    const value = overrides[key];
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      throw new Error(`无效画质参数: ${key}`);
+    }
+    fakeEl('q' + key).value = value;
+  }
+}
 
 const secs = vm.runInContext('renderFinal()', sandbox);
 const packed = vm.runInContext('packedFrame', sandbox);

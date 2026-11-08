@@ -36,12 +36,18 @@ def js_style_linear(src: np.ndarray, expo: float, gamma: float,
     网页里调色是先量化到 8 位再线性化的，和 epd_preview.tone_map 的纯浮点
     路径差一点点；误差扩散对这点差异很敏感，所以这里必须逐步对齐。
     """
-    expo *= ep.white_gain(src / 255.0)   # 与网页 whiteGain(d) 同一条规则
+    # 网页 LIN/tl 都是 Float32Array，进入计算时 JS 提升为 double。
+    # 在线性光误差扩散中，少掉这次 float32 舍入会使长距离误差扩散发散。
+    wg = ep.white_gain(src / 255.0)
+    if 1 < wg < 2.4:
+        wg = 1.0 / float(np.float32(1.0 / wg))
+    expo *= wg
     i = np.arange(256) / 255.0
-    s = ep.lin_to_srgb(ep.srgb_to_lin(i) * expo)
+    lin_table = ep.srgb_to_lin(i).astype(np.float32).astype(np.float64)
+    s = ep.lin_to_srgb(lin_table * expo)
     s = np.clip(0.5 + (s - 0.5) * con, 0.0, 1.0) ** (1.0 / gamma)
-    tone = np.round(s * 255).astype(np.uint8)
-    tl = ep.srgb_to_lin(tone / 255.0)
+    tone = np.floor(s * 255 + 0.5).astype(np.uint8)
+    tl = ep.srgb_to_lin(tone / 255.0).astype(np.float32).astype(np.float64)
 
     r = src[..., 0].astype(np.int64)
     g = src[..., 1].astype(np.int64)
@@ -93,7 +99,7 @@ def main() -> int:
     pb = np.stack([(b >> 6) & 3, (b >> 4) & 3, (b >> 2) & 3, b & 3], axis=1)
     same_px = float((pa == pb).mean())
     print(f"字节一致 {same_byte * 100:.2f}%   像素一致 {same_px * 100:.2f}%")
-    return 0
+    return 0 if same_px >= 0.999 else 1
 
 
 if __name__ == "__main__":

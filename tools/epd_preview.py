@@ -7,8 +7,8 @@
 算法 --algo fsgm（手机网页用的是这一条，也是默认目标）：
   1. cover 裁切到 768x552
   2. sRGB 域：饱和度 → 曝光(线性域) → 对比度 → 伽马
-  3. 转到 Oklab，把每个像素投影到「四色凸包最合适的边」上（丢弃印不出的色度）
-  4. Floyd–Steinberg 误差扩散（蛇形扫描）选四色之一 → 2bpp 索引
+  3. 保留真实线性色域内的颜色；域外用 Oklab 六边近似，再收回真实凸包
+  4. 在线性光中做 Floyd–Steinberg 误差扩散（蛇形扫描）→ 2bpp 索引
 
 其它 --algo 用于对照：edge（板上旧的蓝噪声管线）、fs（线性 RGB + FS）、
 fsok（Oklab + FS、不做色域映射）、bayer4（更旧的 4x4 Bayer）。
@@ -249,6 +249,66 @@ def lin_to_oklab(lin: np.ndarray) -> np.ndarray:
     return np.stack([L, A, B], axis=-1)
 
 
+def oklab_to_lin(lab: np.ndarray) -> np.ndarray:
+    """Inverse of lin_to_oklab; Ottosson's published inverse matrices."""
+    l, a, b = lab[..., 0], lab[..., 1], lab[..., 2]
+    ll = (l + 0.3963377774 * a + 0.2158037573 * b) ** 3
+    mm = (l - 0.1055613458 * a - 0.0638541728 * b) ** 3
+    ss = (l - 0.0894841775 * a - 1.2914855480 * b) ** 3
+    return np.stack([4.0767416621 * ll - 3.3077115913 * mm + 0.2309699292 * ss,
+                     -1.2684380046 * ll + 2.6097574011 * mm - 0.3413193965 * ss,
+                     -0.0041960863 * ll - 0.7034186147 * mm + 1.7076147010 * ss], axis=-1)
+
+
+def physical_inside(lin: np.ndarray) -> np.ndarray:
+    pal = srgb_to_lin(PALETTE / 255.0)
+    inv = np.linalg.inv((pal[1:] - pal[0]).T)
+    weights = (lin - pal[0]) @ inv.T
+    return (weights >= -1e-6).all(axis=-1) & (weights.sum(axis=-1) <= 1 + 1e-6)
+
+
+def physical_project(lin: np.ndarray) -> np.ndarray:
+    """Closest point on the complete linear-light tetrahedron (faces + edges)."""
+    pal = srgb_to_lin(PALETTE / 255.0)
+    best = lin.copy()
+    best_err = np.full(lin.shape[:-1], np.inf)
+
+    def take(candidate, valid):
+        nonlocal best, best_err
+        err = ((lin - candidate) ** 2).sum(axis=-1)
+        use = valid & (err < best_err)
+        best = np.where(use[..., None], candidate, best)
+        best_err = np.where(use, err, best_err)
+
+    for i, j, k in [(0, 1, 2), (0, 1, 3), (0, 2, 3), (1, 2, 3)]:
+        base, a, b = pal[i], pal[j] - pal[i], pal[k] - pal[i]
+        aa, ab, bb = a @ a, a @ b, b @ b
+        d = lin - base
+        da, db = d @ a, d @ b
+        u = (da * bb - db * ab) / (aa * bb - ab * ab)
+        v = (db * aa - da * ab) / (aa * bb - ab * ab)
+        take(base + u[..., None] * a + v[..., None] * b,
+             (u >= 0) & (v >= 0) & (u + v <= 1))
+    for i in range(4):
+        for j in range(i + 1, 4):
+            d = pal[j] - pal[i]
+            t = np.clip(((lin - pal[i]) @ d) / (d @ d), 0, 1)
+            take(pal[i] + t[..., None] * d, True)
+    return np.where(physical_inside(lin)[..., None], lin, best)
+
+
+def physical_gamut_map_lin(lin: np.ndarray, hue=0.0, temp=0.0) -> np.ndarray:
+    """Keep attainable colors; map out-of-gamut colors perceptually, then ensure feasibility.
+
+    The six Oklab segments remain an approximation for out-of-gamut mapping.
+    Error diffusion must use linear light, since ink dots mix by area.
+    """
+    lab = ok_adjust(lin_to_oklab(lin), hue, temp)
+    target = oklab_to_lin(lab)
+    mapped = physical_project(oklab_to_lin(ok_gamut_map_lab(lab)))
+    return np.where(physical_inside(target)[..., None], target, mapped)
+
+
 def algo_fs_ok(srgb: np.ndarray, strength: float = 1.0,
                clamp_err: float = 0.25) -> np.ndarray:
     """Oklab 里最近色 + 误差扩散；误差夹紧，避免不可达色（蓝/绿）漂移。"""
@@ -330,7 +390,7 @@ def ok_gamut_map_lab(lab: np.ndarray) -> np.ndarray:
 
 
 def algo_fs_gm(srgb: np.ndarray, strength: float = 1.0,
-               clamp_err: float = 0.25, jitter: float = 0.0,
+               clamp_err: float | None = None, jitter: float = 0.0,
                hue: float = 0.0, temp: float = 0.0,
                grain: int = 1) -> np.ndarray:
     """先色域映射到凸包，再做误差扩散 —— 抖动只负责混色，不再背着
@@ -367,16 +427,15 @@ def block_expand(idx: np.ndarray, n: int, h: int, w: int) -> np.ndarray:
 
 
 def algo_fs_gm_lin(lin: np.ndarray, strength: float = 1.0,
-                   clamp_err: float = 0.25, jitter: float = 0.0,
+                   clamp_err: float | None = None, jitter: float = 0.0,
                    hue: float = 0.0, temp: float = 0.0,
                    grain: int = 1) -> np.ndarray:
     """同 algo_fs_gm，但输入直接是线性 RGB（0..1）。"""
-    """同 algo_fs_gm，但输入直接是线性 RGB（0..1）。"""
-    pal = lin_to_oklab(srgb_to_lin(PALETTE / 255.0))
+    pal = srgb_to_lin(PALETTE / 255.0)
     full_h, full_w, _ = lin.shape
     if grain > 1:
         lin = block_average(lin, grain)
-    buf = ok_gamut_map_lin(lin, hue, temp)
+    buf = physical_gamut_map_lin(lin, hue, temp)
     h, w, _ = buf.shape
     idx = np.zeros((h, w), dtype=np.uint8)
     rng = np.random.default_rng(20261031)
@@ -390,7 +449,8 @@ def algo_fs_gm_lin(lin: np.ndarray, strength: float = 1.0,
             err = (c - pal[k]) * strength
             if jitter > 0:
                 err = err + (rng.random(3) - 0.5) * jitter
-            err = np.clip(err, -clamp_err, clamp_err)
+            if clamp_err is not None:
+                err = np.clip(err, -clamp_err, clamp_err)
             if 0 <= x + step < w:
                 buf[y, x + step] += err * (7 / 16)
             if y + 1 < h:
@@ -443,7 +503,7 @@ def main() -> int:
     ap.add_argument("--fs-strength", type=float, default=1.0,
                     help="误差扩散强度，0=不下传误差，1=标准 FS")
     ap.add_argument("--fs-jitter", type=float, default=0.0,
-                    help="误差扰动幅度（Oklab 单位），用于打散条纹")
+                    help="误差扰动幅度（fsgm 为线性 RGB 单位），用于打散条纹")
     ap.add_argument("--exposure", type=float, default=0.60,
                     help="线性域增益；0.60 = 把照片白 255 落到面板白 204")
     ap.add_argument("--no-auto-white", action="store_true",
